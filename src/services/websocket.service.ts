@@ -9,7 +9,7 @@ export interface NotificationData {
   timestamp?: string;
 }
 
-export type NotificationHandler = (notification: NotificationData) => void;
+export type NotificationHandler = (_notification: NotificationData) => void;
 
 class WebSocketService {
   private socket: Socket | null = null;

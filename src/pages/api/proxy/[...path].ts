@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import axios from "axios";
-import { IncomingMessage } from "http";
 
 // Desabilitar body parser para multipart/form-data
 // O body parser será desabilitado dinamicamente no handler

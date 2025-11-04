@@ -76,7 +76,7 @@ export const friendsService = {
         throw new Error("Formato de resposta inesperado do backend");
       }
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao enviar pedido de amizade";
       
@@ -114,7 +114,7 @@ export const friendsService = {
         throw new Error("Formato de resposta inesperado do backend");
       }
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao buscar pedidos de amizade";
       
@@ -144,7 +144,7 @@ export const friendsService = {
         throw new Error("Formato de resposta inesperado do backend");
       }
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao aceitar pedido de amizade";
       
@@ -166,7 +166,7 @@ export const friendsService = {
     try {
       await api.post(`/friends/requests/${requestId}/reject`);
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao rejeitar pedido de amizade";
       
@@ -208,7 +208,7 @@ export const friendsService = {
         throw new Error("Formato de resposta inesperado do backend");
       }
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao buscar relacionamentos de amizade";
       
@@ -246,7 +246,7 @@ export const friendsService = {
         throw new Error("Formato de resposta inesperado do backend");
       }
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao buscar amigos";
       
@@ -278,11 +278,11 @@ export const friendsService = {
         throw new Error("Formato de resposta inesperado do backend");
       }
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao buscar usuário";
       
-      if (status === 404) {
+      if (_status === 404) {
         message = "Usuário não encontrado";
       } else if (data?.message || data?.error) {
         message = data.message || data.error || message;
@@ -302,11 +302,11 @@ export const friendsService = {
     try {
       await api.delete(`/friends/${friendId}`);
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao remover amizade";
       
-      if (status === 404) {
+      if (_status === 404) {
         message = "Amizade não encontrada";
       } else if (data?.message || data?.error) {
         message = data.message || data.error || message;

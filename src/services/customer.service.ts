@@ -148,18 +148,18 @@ export const customerService = {
         throw new Error("Formato de resposta inesperado do backend");
       }
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao buscar clientes";
       
-      if (status === 500) {
+      if (_status === 500) {
         message = "Erro no servidor. Por favor, verifique o backend ou contacte o administrador.";
         if (data?.message) {
           message += ` Detalhes: ${data.message}`;
         }
-      } else if (status === 404) {
+      } else if (_status === 404) {
         message = "Endpoint não encontrado. Verifique se o backend está configurado correctamente.";
-      } else if (status === 401) {
+      } else if (_status === 401) {
         message = "Não autorizado. Por favor, faça login novamente.";
       } else if (data) {
         message = data.message || data.error || data.detail || message;
@@ -197,18 +197,18 @@ export const customerService = {
         name: customer.fullName || `${customer.firstName || ""} ${customer.lastName || ""}`.trim() || customer.username || "Sem nome",
       };
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao buscar cliente";
       
-      if (status === 500) {
+      if (_status === 500) {
         message = "Erro no servidor. Por favor, verifique o backend ou contacte o administrador.";
         if (data?.message) {
           message += ` Detalhes: ${data.message}`;
         }
-      } else if (status === 404) {
+      } else if (_status === 404) {
         message = "Cliente não encontrado.";
-      } else if (status === 401) {
+      } else if (_status === 401) {
         message = "Não autorizado. Por favor, faça login novamente.";
       } else if (data) {
         message = data.message || data.error || data.detail || message;
@@ -256,7 +256,7 @@ export const customerService = {
         name: customer.fullName || `${customer.firstName || ""} ${customer.lastName || ""}`.trim() || customer.username || "Sem nome",
       };
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao criar cliente";
       if (data) {
@@ -312,7 +312,7 @@ export const customerService = {
         name: customer.fullName || `${customer.firstName || ""} ${customer.lastName || ""}`.trim() || customer.username || "Sem nome",
       };
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao actualizar cliente";
       if (data) {
@@ -329,7 +329,7 @@ export const customerService = {
       // Deletar cliente é deletar um user
       await api.delete(`/users/${id}`);
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao eliminar cliente";
       if (data) {

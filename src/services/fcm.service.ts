@@ -180,13 +180,13 @@ class FCMService {
         throw new Error("Resposta do servidor não indica sucesso");
       }
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao registrar token FCM";
       
-      if (status === 401) {
+      if (_status === 401) {
         message = "Não autenticado. Faça login novamente.";
-      } else if (status === 400) {
+      } else if (_status === 400) {
         message = data?.message || data?.error || "Token FCM inválido";
       } else if (data?.message || data?.error) {
         message = data.message || data.error || message;

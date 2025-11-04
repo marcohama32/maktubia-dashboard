@@ -129,11 +129,10 @@ export const authService = {
     } catch (error: any) {
       // Se o endpoint /users/me não existir ou der erro 500/404,
       // tenta usar o token do localStorage para construir um usuário básico
-      const status = error?.response?.status;
-      
       // Se é erro 404 ou 500, assume que o token é válido mas o endpoint tem problema
-      if (status === 500 || status === 404) {
-        console.warn(`Endpoint /users/me retornou ${status}, assumindo token válido`);
+      const _status = error?.response?.status;
+      if (_status === 500 || _status === 404) {
+        console.warn(`Endpoint /users/me retornou ${_status}, assumindo token válido`);
         if (typeof window !== "undefined") {
           const token = localStorage.getItem("auth_token");
           if (token && token !== "undefined") {

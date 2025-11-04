@@ -142,14 +142,14 @@ export const establishmentService = {
       
       return normalized;
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       const requestUrl = `${api.defaults.baseURL}/establishments`;
       let message = "Erro ao buscar estabelecimentos";
       
       // Log detalhado do erro
       console.error("❌ Erro detalhado ao buscar estabelecimentos:", {
-        status,
+        status: _status,
         statusText: err?.response?.statusText,
         url: requestUrl,
         data,
@@ -157,7 +157,7 @@ export const establishmentService = {
         fullError: err
       });
       
-      if (status === 500) {
+      if (_status === 500) {
         message = "Erro no servidor (500). O backend retornou um erro interno.";
         if (data?.message) {
           message += ` Detalhes do servidor: ${data.message}`;
@@ -167,11 +167,11 @@ export const establishmentService = {
           message += ` Detalhes do servidor: ${data.detail}`;
         }
         message += ` URL chamada: ${requestUrl}`;
-      } else if (status === 404) {
+      } else if (_status === 404) {
         message = `Endpoint não encontrado (404). Verifique se o backend está configurado correctamente. URL: ${requestUrl}`;
-      } else if (status === 401) {
+      } else if (_status === 401) {
         message = "Não autorizado (401). Por favor, faça login novamente.";
-      } else if (status === 403) {
+      } else if (_status === 403) {
         message = "Acesso negado (403). Você não tem permissão para aceder a este recurso.";
       } else if (data) {
         message = data.message || data.error || data.detail || message;
@@ -213,18 +213,18 @@ export const establishmentService = {
       
       return establishment;
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao buscar estabelecimento";
       
-      if (status === 500) {
+      if (_status === 500) {
         message = "Erro no servidor. Por favor, verifique o backend ou contacte o administrador.";
         if (data?.message) {
           message += ` Detalhes: ${data.message}`;
         }
-      } else if (status === 404) {
+      } else if (_status === 404) {
         message = "Estabelecimento não encontrado.";
-      } else if (status === 401) {
+      } else if (_status === 401) {
         message = "Não autorizado. Por favor, faça login novamente.";
       } else if (data) {
         message = data.message || data.error || data.detail || message;
@@ -261,7 +261,7 @@ export const establishmentService = {
       
       return establishment;
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao criar estabelecimento";
       if (data) {
@@ -303,7 +303,7 @@ export const establishmentService = {
       
       return establishment;
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao atualizar estabelecimento";
       if (data) {
@@ -325,7 +325,7 @@ export const establishmentService = {
       
       await api.delete(`/establishments/${id}`);
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao eliminar estabelecimento";
       if (data) {

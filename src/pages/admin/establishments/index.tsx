@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
 import { establishmentService, Establishment } from "@/services/establishment.service";
-import { API_BASE_URL } from "@/services/api";
 import { QRCodeSVG } from "qrcode.react";
 import { ConfirmModal } from "@/components/modals/ConfirmModal";
 import { AlertModal } from "@/components/modals/AlertModal";

@@ -68,13 +68,13 @@ export const transferService = {
         throw new Error("Formato de resposta inesperado do backend");
       }
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao transferir pontos";
       
-      if (status === 403) {
+      if (_status === 403) {
         message = "Você só pode transferir pontos para seus Maktubia Friends. Adicione este usuário como amigo primeiro.";
-      } else if (status === 400) {
+      } else if (_status === 400) {
         message = data?.message || data?.error || "Dados inválidos para transferência";
       } else if (data?.message || data?.error) {
         message = data.message || data.error || message;
@@ -119,7 +119,7 @@ export const transferService = {
         throw new Error("Formato de resposta inesperado do backend");
       }
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao buscar transferências";
       
@@ -149,11 +149,11 @@ export const transferService = {
         throw new Error("Formato de resposta inesperado do backend");
       }
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao buscar transferência";
       
-      if (status === 404) {
+      if (_status === 404) {
         message = "Transferência não encontrada";
       } else if (data?.message || data?.error) {
         message = data.message || data.error || message;

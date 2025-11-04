@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
 import { establishmentService, Establishment } from "@/services/establishment.service";
-import { API_BASE_URL } from "@/services/api";
 import { processImageUrl } from "@/utils/imageUrl";
 import { QRCodeSVG } from "qrcode.react";
 

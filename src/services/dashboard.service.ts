@@ -55,15 +55,15 @@ class DashboardService {
         throw new Error("Formato de resposta inesperado do backend");
       }
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao buscar dashboard";
 
-      if (status === 401) {
+      if (_status === 401) {
         message = "Não autorizado. Por favor, faça login novamente.";
-      } else if (status === 404) {
+      } else if (_status === 404) {
         message = "Dashboard não encontrado";
-      } else if (status === 500) {
+      } else if (_status === 500) {
         message = data?.message || data?.error || "Erro interno do servidor ao buscar dashboard.";
       } else if (data?.message || data?.error) {
         message = data.message || data.error || message;
@@ -91,15 +91,15 @@ class DashboardService {
         throw new Error("Formato de resposta inesperado do backend");
       }
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao buscar métricas do dashboard";
 
-      if (status === 401) {
+      if (_status === 401) {
         message = "Não autorizado. Por favor, faça login novamente.";
-      } else if (status === 400) {
+      } else if (_status === 400) {
         message = data?.message || data?.error || "Tipo de métrica inválido";
-      } else if (status === 500) {
+      } else if (_status === 500) {
         message = data?.message || data?.error || "Erro interno do servidor ao buscar métricas.";
       } else if (data?.message || data?.error) {
         message = data.message || data.error || message;
@@ -128,15 +128,15 @@ class DashboardService {
         throw new Error("Formato de resposta inesperado do backend");
       }
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao buscar gráficos do dashboard";
 
-      if (status === 401) {
+      if (_status === 401) {
         message = "Não autorizado. Por favor, faça login novamente.";
-      } else if (status === 400) {
+      } else if (_status === 400) {
         message = data?.message || data?.error || "Tipo de gráfico inválido";
-      } else if (status === 500) {
+      } else if (_status === 500) {
         message = data?.message || data?.error || "Erro interno do servidor ao buscar gráficos.";
       } else if (data?.message || data?.error) {
         message = data.message || data.error || message;
@@ -164,13 +164,13 @@ class DashboardService {
         throw new Error("Formato de resposta inesperado do backend");
       }
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao buscar atividades do dashboard";
 
-      if (status === 401) {
+      if (_status === 401) {
         message = "Não autorizado. Por favor, faça login novamente.";
-      } else if (status === 500) {
+      } else if (_status === 500) {
         message = data?.message || data?.error || "Erro interno do servidor ao buscar atividades.";
       } else if (data?.message || data?.error) {
         message = data.message || data.error || message;

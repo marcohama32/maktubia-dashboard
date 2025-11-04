@@ -169,20 +169,20 @@ export const purchaseService = {
         throw new Error("Formato de resposta inesperado do backend");
       }
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao buscar compras";
 
-      if (status === 500) {
+      if (_status === 500) {
         message = "Erro no servidor. Por favor, verifique o backend ou contacte o administrador.";
         if (data?.message) {
           message += ` Detalhes: ${data.message}`;
         }
-      } else if (status === 404) {
+      } else if (_status === 404) {
         message = "Endpoint não encontrado. Verifique se o backend está configurado correctamente.";
-      } else if (status === 401) {
+      } else if (_status === 401) {
         message = "Não autorizado. Por favor, faça login novamente.";
-      } else if (status === 403) {
+      } else if (_status === 403) {
         message = "Acesso negado. Apenas administradores podem visualizar todas as compras.";
       } else if (data) {
         message = data.message || data.error || data.detail || message;
@@ -212,20 +212,20 @@ export const purchaseService = {
 
       return purchase;
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao buscar compra";
 
-      if (status === 500) {
+      if (_status === 500) {
         message = "Erro no servidor. Por favor, verifique o backend ou contacte o administrador.";
         if (data?.message) {
           message += ` Detalhes: ${data.message}`;
         }
-      } else if (status === 404) {
+      } else if (_status === 404) {
         message = "Compra não encontrada.";
-      } else if (status === 401) {
+      } else if (_status === 401) {
         message = "Não autorizado. Por favor, faça login novamente.";
-      } else if (status === 403) {
+      } else if (_status === 403) {
         message = "Acesso negado a esta compra.";
       } else if (data) {
         message = data.message || data.error || data.detail || message;
@@ -255,15 +255,15 @@ export const purchaseService = {
 
       return purchase;
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao confirmar compra";
       
-      if (status === 500) {
+      if (_status === 500) {
         message = data?.message || data?.error || "Erro interno do servidor ao confirmar compra. Por favor, tente novamente.";
-      } else if (status === 404) {
+      } else if (_status === 404) {
         message = "Compra não encontrada";
-      } else if (status === 400) {
+      } else if (_status === 400) {
         message = data?.message || data?.error || "Dados inválidos para confirmar compra";
       } else if (data?.message || data?.error) {
         message = data.message || data.error || message;
@@ -291,7 +291,7 @@ export const purchaseService = {
 
       return purchase;
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao rejeitar compra";
       if (data) {
@@ -328,18 +328,18 @@ export const purchaseService = {
         throw new Error("Formato de resposta inesperado do backend");
       }
     } catch (err: any) {
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao buscar compras pendentes";
 
-      if (status === 500) {
+      if (_status === 500) {
         message = "Erro no servidor. Por favor, verifique o backend ou contacte o administrador.";
         if (data?.message) {
           message += ` Detalhes: ${data.message}`;
         }
-      } else if (status === 404) {
+      } else if (_status === 404) {
         message = "Endpoint não encontrado. Verifique se o backend está configurado correctamente.";
-      } else if (status === 401) {
+      } else if (_status === 401) {
         message = "Não autorizado. Por favor, faça login novamente.";
       } else if (data) {
         message = data.message || data.error || data.detail || message;

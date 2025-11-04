@@ -70,7 +70,6 @@ export const notificationService = {
         };
       }
       
-      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao buscar notificações";
       
@@ -98,7 +97,6 @@ export const notificationService = {
         return;
       }
       
-      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao marcar notificação como lida";
       
@@ -126,7 +124,6 @@ export const notificationService = {
         return;
       }
       
-      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao marcar todas as notificações como lidas";
       

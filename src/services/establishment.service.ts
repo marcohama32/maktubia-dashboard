@@ -261,7 +261,6 @@ export const establishmentService = {
       
       return establishment;
     } catch (err: any) {
-      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao criar estabelecimento";
       if (data) {
@@ -303,7 +302,6 @@ export const establishmentService = {
       
       return establishment;
     } catch (err: any) {
-      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao atualizar estabelecimento";
       if (data) {
@@ -325,7 +323,6 @@ export const establishmentService = {
       
       await api.delete(`/establishments/${id}`);
     } catch (err: any) {
-      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao eliminar estabelecimento";
       if (data) {

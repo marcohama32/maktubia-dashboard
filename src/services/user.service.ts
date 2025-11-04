@@ -193,7 +193,6 @@ export const userService = {
       const response = await api.post<User>("/users", data);
       return response.data;
     } catch (err: any) {
-      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao criar usuário";
       if (data) {
@@ -272,7 +271,6 @@ export const userService = {
         name: user.fullName || `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username || "Sem nome",
       };
     } catch (err: any) {
-      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao actualizar usuário";
       if (data) {
@@ -293,7 +291,6 @@ export const userService = {
     try {
       await api.delete(`/users/${id}`);
     } catch (err: any) {
-      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao eliminar usuário";
       if (data) {

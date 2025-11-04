@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { establishmentService, UpdateEstablishmentDTO } from "@/services/establishment.service";
 import { API_BASE_URL } from "@/services/api";
+import { processImageUrl } from "@/utils/imageUrl";
 
 export default function EditEstablishmentPage() {
   const router = useRouter();
@@ -163,22 +164,6 @@ export default function EditEstablishmentPage() {
   };
 
   // Função para processar URLs de imagens
-  const processImageUrl = (rawImageUrl: string): string => {
-    if (!rawImageUrl) return "/images/logo2.png";
-    
-    if (rawImageUrl.startsWith("http://") || rawImageUrl.startsWith("https://")) {
-      return rawImageUrl;
-    }
-    
-    if (rawImageUrl.startsWith("/")) {
-      if (rawImageUrl.startsWith("/api")) {
-        return `http://72.60.20.31:8000${rawImageUrl}`;
-      }
-      return `${API_BASE_URL}${rawImageUrl}`;
-    }
-    
-    return `${API_BASE_URL}/${rawImageUrl}`;
-  };
 
   // Função para lidar com upload de arquivo
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>, imageNumber: 1 | 2) => {

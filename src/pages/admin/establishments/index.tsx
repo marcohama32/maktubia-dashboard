@@ -5,6 +5,7 @@ import { API_BASE_URL } from "@/services/api";
 import { QRCodeSVG } from "qrcode.react";
 import { ConfirmModal } from "@/components/modals/ConfirmModal";
 import { AlertModal } from "@/components/modals/AlertModal";
+import { processImageUrl } from "@/utils/imageUrl";
 
 const ITEMS_PER_PAGE = 12;
 
@@ -157,25 +158,6 @@ export default function EstablishmentsPage() {
     router.push("/admin/establishments/new");
   };
 
-  // Função para processar uma URL de imagem individual
-  const processImageUrl = (rawImageUrl: string): string => {
-    if (!rawImageUrl) {
-      return "/images/logo2.png";
-    }
-    
-    if (rawImageUrl.startsWith("http://") || rawImageUrl.startsWith("https://")) {
-      return rawImageUrl;
-    }
-    
-    if (rawImageUrl.startsWith("/")) {
-      if (rawImageUrl.startsWith("/api")) {
-        return `http://72.60.20.31:8000${rawImageUrl}`;
-      }
-      return `${API_BASE_URL}${rawImageUrl}`;
-    }
-    
-    return `${API_BASE_URL}/${rawImageUrl}`;
-  };
 
   // Função para obter todas as imagens de um estabelecimento
   const getImages = (establishment: Establishment): string[] => {

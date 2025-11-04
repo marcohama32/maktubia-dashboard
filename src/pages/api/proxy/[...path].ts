@@ -35,12 +35,16 @@ export default async function handler(
       }
     }
 
+    // Preparar query params (remover 'path' que é usado para routing)
+    const queryParams: any = { ...req.query };
+    delete queryParams.path; // Remover 'path' dos query params
+
     // Fazer requisição para o backend
     const response = await axios({
       method: req.method,
       url: targetUrl,
       data: requestBody,
-      params: req.query, // Query params (para GET requests)
+      params: Object.keys(queryParams).length > 0 ? queryParams : undefined,
       headers: {
         "Content-Type": "application/json",
         ...(authHeader && { Authorization: authHeader }),

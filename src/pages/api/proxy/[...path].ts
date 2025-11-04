@@ -50,23 +50,21 @@ export default async function handler(
     if (req.method !== "GET" && req.method !== "DELETE" && req.method !== "HEAD") {
       if (isMultipart) {
         // Para FormData, usar o stream diretamente do request
-        // O req é um IncomingMessage, podemos passar como stream
-        requestBody = req as any;
+        // Axios aceita streams (IncomingMessage)
+        requestBody = req;
       } else {
-        // Para JSON, fazer parse manual do body
-        if (req.body) {
+        // Para JSON, ler o stream e fazer parse
+        const chunks: Buffer[] = [];
+        for await (const chunk of req as any) {
+          chunks.push(chunk);
+        }
+        const bodyBuffer = Buffer.concat(chunks);
+        if (bodyBuffer.length > 0) {
           try {
-            // Se já é objeto, usar diretamente
-            if (typeof req.body === "object" && !Buffer.isBuffer(req.body)) {
-              requestBody = req.body;
-            } else {
-              // Se é string ou buffer, fazer parse JSON
-              const bodyStr = typeof req.body === "string" ? req.body : req.body.toString();
-              requestBody = bodyStr ? JSON.parse(bodyStr) : undefined;
-            }
+            requestBody = JSON.parse(bodyBuffer.toString());
           } catch (e) {
-            // Se não conseguir parsear, usar como está
-            requestBody = req.body;
+            // Se não conseguir parsear, usar buffer
+            requestBody = bodyBuffer;
           }
         }
       }

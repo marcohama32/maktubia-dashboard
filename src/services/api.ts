@@ -14,6 +14,12 @@ const getApiBaseUrl = () => {
     return "/api/proxy";
   }
   // Caso contrário, usar API direta
+  // Em desenvolvimento, FORÇAR localhost mesmo se .env.local estiver configurado
+  if (process.env.NODE_ENV === "development" || 
+      (typeof window !== "undefined" && window.location.hostname === "localhost")) {
+    return "http://localhost:8000/api";
+  }
+  // Em produção, usar API remota ou a configurada no .env
   return process.env.NEXT_PUBLIC_API_BASE_URL || "http://72.60.20.31:8000/api";
 };
 

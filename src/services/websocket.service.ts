@@ -43,7 +43,11 @@ class WebSocketService {
       // Socket.io precisa da URL base sem o /api
       // Usar variável de ambiente se disponível, senão extrair da API_BASE_URL
       const wsUrl = process.env.NEXT_PUBLIC_WS_URL;
-      let baseUrl = wsUrl || API_BASE_URL.replace(/\/api\/?$/, "").replace(/\/$/, "") || "http://72.60.20.31:8000";
+      // Em desenvolvimento, usar localhost por padrão
+      const defaultUrl = process.env.NODE_ENV === "development" 
+        ? "http://localhost:8000" 
+        : "http://72.60.20.31:8000";
+      let baseUrl = wsUrl || API_BASE_URL.replace(/\/api\/?$/, "").replace(/\/$/, "") || defaultUrl;
       
       // Se estiver usando proxy da API, não podemos usar WebSocket direto
       // (WebSocket não funciona através de proxy HTTP simples)

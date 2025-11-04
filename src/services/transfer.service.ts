@@ -119,7 +119,6 @@ export const transferService = {
         throw new Error("Formato de resposta inesperado do backend");
       }
     } catch (err: any) {
-      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao buscar transferências";
       

@@ -291,7 +291,6 @@ export const purchaseService = {
 
       return purchase;
     } catch (err: any) {
-      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao rejeitar compra";
       if (data) {

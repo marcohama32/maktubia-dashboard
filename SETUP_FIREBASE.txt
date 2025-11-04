@@ -1,0 +1,47 @@
+===========================================
+CONFIGURAÇÃO DO FIREBASE - PRÓXIMOS PASSOS
+===========================================
+
+✅ Você já obteve as configurações do Firebase!
+Agora siga estes passos:
+
+1. CRIAR ARQUIVO .env.local
+   - Na raiz do projeto (mesmo nível do package.json)
+   - Crie um arquivo chamado: .env.local
+   - (sem aspas, apenas: .env.local)
+
+2. COPIAR AS SEGUINTES CONFIGURAÇÕES:
+
+# Firebase Configuration
+NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyArUW9mGkHHCvpBVqZC5OemDdVehjAzQwo
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=maktubiap.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=maktubiap
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=maktubiap.firebasestorage.app
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=572350716093
+NEXT_PUBLIC_FIREBASE_APP_ID=1:572350716093:web:27f1c6be5dad7cf0ff7fd4
+
+# VAPID Key (você ainda precisa obter!)
+NEXT_PUBLIC_FIREBASE_VAPID_KEY=SUA_VAPID_KEY_AQUI
+
+# API Base URL
+NEXT_PUBLIC_API_BASE_URL=http://72.60.20.31:8000/api
+
+3. OBTER A VAPID KEY:
+   - Acesse: https://console.firebase.google.com/
+   - Vá em: Project Settings (ícone de engrenagem)
+   - Clique na aba: "Cloud Messaging"
+   - Role até: "Web Push certificates"
+   - Clique em: "Generate key pair" (se não existir)
+   - Copie a chave gerada
+   - Cole no .env.local substituindo: SUA_VAPID_KEY_AQUI
+
+4. REINICIAR O SERVIDOR:
+   - Pare o servidor (Ctrl+C)
+   - Execute: npm run dev
+
+===========================================
+IMPORTANTE: Sem a VAPID Key, as push 
+notificações NÃO funcionarão!
+===========================================
+
+

@@ -8,6 +8,10 @@
     {
       "source": "/api/proxy/:path*",
       "destination": "http://72.60.20.31:8000/api/:path*"
+    },
+    {
+      "source": "/api/proxy",
+      "destination": "http://72.60.20.31:8000/api"
     }
   ],
   "headers": [

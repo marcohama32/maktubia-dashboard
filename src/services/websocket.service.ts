@@ -27,12 +27,31 @@ class WebSocketService {
     this.isConnecting = true;
 
     try {
+      // Em produção HTTPS, não usar WebSocket se não for WSS (Mixed Content)
+      if (
+        typeof window !== "undefined" &&
+        window.location.protocol === "https:" &&
+        !process.env.NEXT_PUBLIC_WS_URL?.startsWith("wss://")
+      ) {
+        console.warn("⚠️ WebSocket desabilitado em produção HTTPS. Backend não suporta WSS.");
+        this.isConnecting = false;
+        return;
+      }
+
       // Extrair URL base da API (remover /api)
       // Se a URL termina com /api, remove; caso contrário, usa como está
       // Socket.io precisa da URL base sem o /api
       // Usar variável de ambiente se disponível, senão extrair da API_BASE_URL
       const wsUrl = process.env.NEXT_PUBLIC_WS_URL;
-      const baseUrl = wsUrl || API_BASE_URL.replace(/\/api\/?$/, "").replace(/\/$/, "") || "http://72.60.20.31:8000";
+      let baseUrl = wsUrl || API_BASE_URL.replace(/\/api\/?$/, "").replace(/\/$/, "") || "http://72.60.20.31:8000";
+      
+      // Se estiver usando proxy da API, não podemos usar WebSocket direto
+      // (WebSocket não funciona através de proxy HTTP simples)
+      if (baseUrl.startsWith("/")) {
+        console.warn("⚠️ WebSocket não disponível via proxy. Desabilitando WebSocket.");
+        this.isConnecting = false;
+        return;
+      }
       
       this.socket = io(baseUrl, {
         transports: ["websocket", "polling"], // Suportar polling como fallback

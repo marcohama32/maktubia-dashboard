@@ -1,6 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import axios from "axios";
 
+// Desabilitar body parser padrão do Next.js para ter controle total
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "1mb",
+    },
+  },
+};
+
 const BACKEND_URL = "http://72.60.20.31:8000/api";
 
 export default async function handler(
@@ -22,15 +31,9 @@ export default async function handler(
 
     // Preparar body apenas se necessário (POST, PUT, PATCH)
     let requestBody = undefined;
-    if (req.method !== "GET" && req.method !== "DELETE" && req.body) {
-      // Se body já é objeto, usar diretamente; se for string, parsear JSON
-      if (typeof req.body === "string") {
-        try {
-          requestBody = JSON.parse(req.body);
-        } catch {
-          requestBody = req.body;
-        }
-      } else {
+    if (req.method !== "GET" && req.method !== "DELETE" && req.method !== "HEAD") {
+      // Next.js já faz parsing automático do JSON, mas garantir que está correto
+      if (req.body && Object.keys(req.body).length > 0) {
         requestBody = req.body;
       }
     }

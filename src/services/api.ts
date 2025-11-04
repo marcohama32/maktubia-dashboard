@@ -1,7 +1,23 @@
 import axios from "axios";
 
-// Usar variável de ambiente ou fallback para desenvolvimento
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://72.60.20.31:8000/api";
+// Em produção (Vercel HTTPS), usar proxy para evitar Mixed Content
+// Em desenvolvimento, usar API direta
+const getApiBaseUrl = () => {
+  // Se estiver em produção (HTTPS) e a API configurada for HTTP, usar proxy
+  if (
+    typeof window !== "undefined" &&
+    window.location.protocol === "https:" &&
+    (process.env.NEXT_PUBLIC_API_BASE_URL?.startsWith("http://") ||
+      !process.env.NEXT_PUBLIC_API_BASE_URL)
+  ) {
+    // Usar proxy via Vercel rewrites (/api/proxy -> http://72.60.20.31:8000/api)
+    return "/api/proxy";
+  }
+  // Caso contrário, usar API direta
+  return process.env.NEXT_PUBLIC_API_BASE_URL || "http://72.60.20.31:8000/api";
+};
+
+export const API_BASE_URL = getApiBaseUrl();
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

@@ -81,7 +81,7 @@ export const authService = {
       };
     } catch (err: any) {
       // Normaliza a mensagem de erro para facilitar o tratamento na UI
-      const status = err?.response?.status;
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao efectuar o login";
       if (data) {
@@ -93,7 +93,7 @@ export const authService = {
 
       const finalError = new Error(message);
       // @ts-ignore attach status for more context if needed
-      finalError.status = status;
+      finalError.status = _status;
 
       // Tenta ler header Retry-After (pode ser em segundos ou em formato de data)
       const headers = err?.response?.headers;

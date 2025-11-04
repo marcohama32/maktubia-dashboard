@@ -233,7 +233,7 @@ export const establishmentService = {
       }
       
       console.error("Erro ao buscar estabelecimento:", {
-        status,
+        status: _status,
         data,
         error: err
       });

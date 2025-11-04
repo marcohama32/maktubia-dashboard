@@ -61,7 +61,7 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    const status = error.response?.status;
+    const _status = error.response?.status;
     const url = error.config?.url;
     const fullUrl = `${error.config?.baseURL || ""}${url || ""}`;
     const method = error.config?.method?.toUpperCase() || "GET";
@@ -69,16 +69,16 @@ api.interceptors.response.use(
     // Não logar erros 404 de endpoints opcionais (notificações, etc)
     const isOptionalEndpoint = url === "/notifications" || url?.includes("/notifications");
     
-    if (!isOptionalEndpoint || status !== 404) {
+    if (!isOptionalEndpoint || _status !== 404) {
       // Log detalhado do erro apenas se não for endpoint opcional com 404
       console.error(`❌ Erro na requisição: ${method} ${fullUrl}`);
-      console.error(`   Status: ${status}`);
+      console.error(`   Status: ${_status}`);
       if (error.response?.data) {
         console.error("   Dados do erro:", error.response.data);
       }
     }
     
-    if (status === 401) {
+    if (_status === 401) {
       // Se receber 401 e não for login, limpar token e redirecionar
       if (typeof window !== "undefined") {
         const currentPath = window.location.pathname;

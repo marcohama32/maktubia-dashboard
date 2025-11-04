@@ -2,6 +2,17 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 import { useAuth } from "./AuthContext";
 import { notificationService, Notification as NotificationServiceType } from "@/services/notification.service";
 
+// Importar websocketService diretamente (import dinâmico estava causando ChunkLoadError)
+let websocketService: any = null;
+if (typeof window !== "undefined") {
+  try {
+    const wsModule = require("@/services/websocket.service");
+    websocketService = wsModule.websocketService;
+  } catch (error) {
+    console.warn("⚠️ WebSocket service não disponível:", error);
+  }
+}
+
 export interface Notification {
   id: string | number;
   type: string;
@@ -145,9 +156,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     // Lazy load websocket service if not already loaded
     const initWebSocket = async () => {
-      if (!websocketServiceRef.current) {
-        const wsModule = await import("@/services/websocket.service");
-        websocketServiceRef.current = wsModule.websocketService;
+      if (!websocketServiceRef.current && websocketService) {
+        websocketServiceRef.current = websocketService;
       }
 
       const wsService = websocketServiceRef.current;
@@ -214,9 +224,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     const disconnectWebSocket = async () => {
       if (!isAuthenticated) {
-        if (!websocketServiceRef.current) {
-          const wsModule = await import("@/services/websocket.service");
-          websocketServiceRef.current = wsModule.websocketService;
+        if (!websocketServiceRef.current && websocketService) {
+          websocketServiceRef.current = websocketService;
         }
         if (websocketServiceRef.current) {
           websocketServiceRef.current.disconnect();

@@ -69,18 +69,25 @@ export default function EditUserPage() {
         setRoles(systemRoles);
       }
     } catch (err: any) {
-      console.error("Erro ao carregar roles:", err);
+      // Verificar se é erro 500 (Internal Server Error) ou erro de rede
+      const status = err?.response?.status;
       const isNetworkError = err.isNetworkError || err.message?.includes("Servidor não disponível");
+      const isServerError = status === 500 || status === 502 || status === 503 || status === 504;
       
-      // Se houver erro de rede ou não encontrar roles, usar roles padrão do sistema
-      if (isNetworkError || err.message?.includes("não encontrada")) {
-        console.warn("⚠️ Usando roles padrão do sistema devido a erro ao buscar do backend");
+      // Se houver erro de servidor (500, 502, 503, 504) ou rede, usar roles padrão silenciosamente
+      if (isServerError || isNetworkError || err.message?.includes("não encontrada")) {
+        // Não logar erro para erros de servidor - usar fallback silenciosamente
+        if (!isServerError) {
+          console.warn("⚠️ Usando roles padrão do sistema devido a erro ao buscar do backend");
+        }
         setRoles([
           { id: 1, name: "admin", description: "Administrador do sistema com acesso total" },
           { id: 2, name: "merchant", description: "Merchant (gerencia estabelecimentos e campanhas)" },
           { id: 3, name: "user", description: "Cliente padrão do sistema de pontos" },
         ]);
-      } else if (!isNetworkError) {
+      } else {
+        // Apenas logar e mostrar erro para outros tipos de erro
+        console.error("Erro ao carregar roles:", err);
         setError(err.message || "Erro ao carregar roles");
       }
     } finally {

@@ -87,6 +87,11 @@ api.interceptors.response.use(
     // Não logar erros 404 de endpoints opcionais (notificações, etc)
     const isOptionalEndpoint = url === "/notifications" || url?.includes("/notifications");
     
+    // Endpoints com fallback silencioso - não logar erros 500
+    const isRolesEndpoint = url === "/roles" || url?.includes("/roles");
+    const isServerError = _status === 500 || _status === 502 || _status === 503 || _status === 504;
+    const shouldSuppressLog = isRolesEndpoint && isServerError;
+    
     // Para erros de rede, não logar nada (apenas marcar o erro)
     // Os logs nativos do navegador (net::ERR_CONNECTION_REFUSED) não podem ser suprimidos
     if (isNetworkError) {
@@ -102,8 +107,8 @@ api.interceptors.response.use(
       // Não logar nada aqui - apenas deixar que o navegador mostre os logs nativos
       error.isNetworkError = true;
       error.networkErrorMessage = "Servidor não disponível. Verifique se o backend está rodando.";
-    } else if (!isOptionalEndpoint || _status !== 404) {
-      // Log detalhado do erro apenas se não for endpoint opcional com 404
+    } else if (!shouldSuppressLog && (!isOptionalEndpoint || _status !== 404)) {
+      // Log detalhado do erro apenas se não for endpoint opcional com 404 ou endpoint com fallback silencioso
       console.error(`❌ Erro na requisição: ${method} ${fullUrl}`);
       console.error(`   Status: ${_status}`);
       if (error.response?.data) {

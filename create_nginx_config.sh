@@ -75,3 +75,4 @@ echo "   sudo ln -s /etc/nginx/sites-available/maktubia /etc/nginx/sites-enabled
 echo "   sudo nginx -t"
 echo "   sudo systemctl reload nginx"
 
+

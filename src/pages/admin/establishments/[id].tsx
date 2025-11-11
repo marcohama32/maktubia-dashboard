@@ -784,7 +784,7 @@ export default function EstablishmentDetailsPage() {
                     false;
                   
                   return (
-                    <div key={merchant.merchant_id || merchant.id} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
+                    <div key={merchant.merchant_id || (merchant as any).id || index} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <h3 className="font-semibold text-gray-900">{userName}</h3>

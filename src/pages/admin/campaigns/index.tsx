@@ -800,6 +800,9 @@ function CampaignsByStatusChart({ campaigns }: { campaigns: Campaign[] }) {
   const ResponsiveContainerComponent = ResponsiveContainer as any;
   const PieChartComponent = PieChart as any;
   const PieComponent = Pie as any;
+  const CellComponent = Cell as any;
+  const TooltipComponent = Tooltip as any;
+  const LegendComponent = Legend as any;
   
   return (
     <ResponsiveContainerComponent width="100%" height={120}>
@@ -815,11 +818,11 @@ function CampaignsByStatusChart({ campaigns }: { campaigns: Campaign[] }) {
           dataKey="value"
         >
           {statusData.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            <CellComponent key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
           ))}
         </PieComponent>
-        <Tooltip />
-        <Legend wrapperStyle={{ fontSize: "10px" }} iconSize={8} />
+        <TooltipComponent />
+        <LegendComponent wrapperStyle={{ fontSize: "10px" }} iconSize={8} />
       </PieChartComponent>
     </ResponsiveContainerComponent>
   );
@@ -849,6 +852,9 @@ function CampaignsByTypeChart({ campaigns }: { campaigns: Campaign[] }) {
   const ResponsiveContainerComponent = ResponsiveContainer as any;
   const PieChartComponent = PieChart as any;
   const PieComponent = Pie as any;
+  const CellComponent = Cell as any;
+  const TooltipComponent = Tooltip as any;
+  const LegendComponent = Legend as any;
   
   return (
     <ResponsiveContainerComponent width="100%" height={200}>
@@ -864,11 +870,11 @@ function CampaignsByTypeChart({ campaigns }: { campaigns: Campaign[] }) {
           dataKey="value"
         >
           {typeData.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            <CellComponent key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
           ))}
         </PieComponent>
-        <Tooltip />
-        <Legend wrapperStyle={{ fontSize: "12px" }} />
+        <TooltipComponent />
+        <LegendComponent wrapperStyle={{ fontSize: "12px" }} />
       </PieChartComponent>
     </ResponsiveContainerComponent>
   );
@@ -901,6 +907,9 @@ function PurchasesByStatusChart({ metrics }: { metrics: any }) {
   const ResponsiveContainerComponent = ResponsiveContainer as any;
   const PieChartComponent = PieChart as any;
   const PieComponent = Pie as any;
+  const CellComponent = Cell as any;
+  const TooltipComponent = Tooltip as any;
+  const LegendComponent = Legend as any;
   
   return (
     <ResponsiveContainerComponent width="100%" height={200}>
@@ -916,11 +925,11 @@ function PurchasesByStatusChart({ metrics }: { metrics: any }) {
           dataKey="value"
         >
           {purchaseData.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            <CellComponent key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
           ))}
         </PieComponent>
-        <Tooltip />
-        <Legend wrapperStyle={{ fontSize: "12px" }} />
+        <TooltipComponent />
+        <LegendComponent wrapperStyle={{ fontSize: "12px" }} />
       </PieChartComponent>
     </ResponsiveContainerComponent>
   );

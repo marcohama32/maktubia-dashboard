@@ -795,7 +795,7 @@ export default function EstablishmentDetailsPage() {
                             <p className="mt-1 text-xs text-gray-400">{userPhone}</p>
                           )}
                         </div>
-                        {(merchant.is_active !== false && merchantUser?.isActive !== false) ? (
+                        {(merchant.is_active !== false && ((merchantUser as any)?.isActive !== false || (merchantUser as any)?.is_active !== false)) ? (
                           <span className="inline-flex rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-800">
                             Ativo
                           </span>

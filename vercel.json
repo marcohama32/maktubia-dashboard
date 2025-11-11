@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build:clean || npm run build",
+  "buildCommand": "rm -rf .next && rm -rf node_modules/.cache && npm run build",
   "devCommand": "npm run dev",
   "installCommand": "npm install",
   "framework": "nextjs",

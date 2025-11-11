@@ -9,6 +9,15 @@ Este guia explica como fazer deploy da aplicação Next.js **diretamente na Host
 - [ ] Domínio configurado (opcional, mas recomendado)
 - [ ] Código no Git (GitHub/GitLab/Bitbucket)
 
+## ⚠️ IMPORTANTE: API Já Rodando no Servidor
+
+**Se você já tem uma API rodando no servidor:**
+- ✅ **Não há conflito** - podem rodar juntos
+- ✅ API em uma porta (ex: 8000)
+- ✅ Next.js em outra porta (ex: 3000)
+- ✅ Nginx faz proxy reverso para ambos
+- ✅ Configuração do Nginx abaixo já inclui roteamento para API
+
 ---
 
 ## 🎯 Passo 1: Acessar o Servidor VPS
@@ -213,7 +222,7 @@ Execute o comando que o `pm2 startup` mostrará (algo como `sudo env PATH=...`).
 nano /etc/nginx/sites-available/maktubia-dashboard
 ```
 
-Adicione:
+**⚠️ IMPORTANTE:** Se você já tem uma API rodando no servidor, configure o Nginx para rotear corretamente:
 
 ```nginx
 server {
@@ -223,6 +232,39 @@ server {
     # Redirecionar HTTP para HTTPS (após configurar SSL)
     # return 301 https://$server_name$request_uri;
 
+    # Rota para API (se sua API está rodando na porta 8000)
+    location /api {
+        proxy_pass http://localhost:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # CORS headers (se necessário)
+        add_header Access-Control-Allow-Origin *;
+        add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS";
+        add_header Access-Control-Allow-Headers "Authorization, Content-Type";
+        
+        # Timeouts
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    # WebSocket para API (se sua API usa WebSocket)
+    location /socket.io {
+        proxy_pass http://localhost:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Frontend Next.js (todas as outras rotas)
     location / {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
@@ -240,7 +282,7 @@ server {
         proxy_read_timeout 60s;
     }
 
-    # Cache de arquivos estáticos
+    # Cache de arquivos estáticos do Next.js
     location /_next/static {
         proxy_pass http://localhost:3000;
         proxy_cache_valid 200 60m;
@@ -249,7 +291,9 @@ server {
 }
 ```
 
-**Substitua `seu-dominio.com` pelo seu domínio real.**
+**Substitua:**
+- `seu-dominio.com` pelo seu domínio real
+- `localhost:8000` pela porta onde sua API está rodando (se for diferente)
 
 ### 6.2. Ativar Site
 
@@ -386,6 +430,72 @@ netstat -tulpn | grep 3000
 
 # Verificar se o Nginx está rodando na porta 80/443
 netstat -tulpn | grep nginx
+```
+
+---
+
+## 🔧 Configuração com API Existente
+
+### Verificar Porta da API
+
+```bash
+# Verificar em qual porta sua API está rodando
+netstat -tulpn | grep LISTEN
+
+# Ou verificar processos Node.js
+pm2 list
+
+# Ou verificar processos na porta específica (ex: 8000)
+lsof -i :8000
+```
+
+### Ajustar Configuração do Nginx
+
+Se sua API está em uma porta diferente de 8000, ajuste a configuração do Nginx:
+
+```nginx
+# Se API está na porta 3001, por exemplo:
+location /api {
+    proxy_pass http://localhost:3001;  # Ajuste a porta aqui
+    # ... resto da configuração
+}
+```
+
+### Verificar se Não Há Conflito de Portas
+
+```bash
+# Verificar todas as portas em uso
+netstat -tulpn | grep LISTEN
+
+# Certifique-se de que:
+# - API está em uma porta (ex: 8000)
+# - Next.js está em outra porta (ex: 3000)
+# - Nginx está nas portas 80 (HTTP) e 443 (HTTPS)
+```
+
+### Configuração de CORS (se necessário)
+
+Se sua API precisa de CORS, você pode configurar no Nginx ou na própria API. No Nginx:
+
+```nginx
+location /api {
+    # ... outras configurações ...
+    
+    # CORS headers
+    if ($request_method = 'OPTIONS') {
+        add_header 'Access-Control-Allow-Origin' '*';
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS';
+        add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type';
+        add_header 'Access-Control-Max-Age' 1728000;
+        add_header 'Content-Type' 'text/plain; charset=utf-8';
+        add_header 'Content-Length' 0;
+        return 204;
+    }
+    
+    add_header 'Access-Control-Allow-Origin' '*' always;
+    add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
+    add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type' always;
+}
 ```
 
 ---

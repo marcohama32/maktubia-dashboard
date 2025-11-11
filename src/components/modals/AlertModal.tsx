@@ -97,7 +97,7 @@ export function AlertModal({
         {/* Modal panel */}
         <div 
           className="relative inline-block overflow-hidden rounded-lg bg-white text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle"
-          style={{ pointerEvents: 'auto', zIndex: 10000 }}
+          style={{ pointerEvents: "auto", zIndex: 10000 }}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-4">

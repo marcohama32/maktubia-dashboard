@@ -1019,19 +1019,28 @@ export default function CampaignDetailsPage() {
                     <p className="mt-1 text-sm text-gray-900">{campaign.voucherMinPurchase.toLocaleString("pt-MZ")} MT</p>
                   </div>
                 )}
-                {campaign.voucherDiscountType && (
+                {((campaign.voucherPercentage !== undefined && campaign.voucherPercentage !== null) || 
+                  (campaign.voucherFixedAmount !== undefined && campaign.voucherFixedAmount !== null)) && (
                   <div>
                     <p className="text-sm font-medium text-gray-500">Tipo de Desconto</p>
-                    <p className="mt-1 text-sm text-gray-900 capitalize">{campaign.voucherDiscountType}</p>
+                    <p className="mt-1 text-sm text-gray-900 capitalize">
+                      {campaign.voucherPercentage !== undefined && campaign.voucherPercentage !== null ? "Percentual" : "Fixo"}
+                    </p>
                   </div>
                 )}
-                {campaign.voucherDiscountValue !== undefined && campaign.voucherDiscountValue !== null && (
+                {campaign.voucherPercentage !== undefined && campaign.voucherPercentage !== null && (
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Valor do Desconto</p>
+                    <p className="text-sm font-medium text-gray-500">Valor do Desconto (Percentual)</p>
                     <p className="mt-1 text-sm text-gray-900">
-                      {campaign.voucherDiscountType === "percentual" 
-                        ? `${campaign.voucherDiscountValue}%`
-                        : `${campaign.voucherDiscountValue.toLocaleString("pt-MZ")} MT`}
+                      {campaign.voucherPercentage}%
+                    </p>
+                  </div>
+                )}
+                {campaign.voucherFixedAmount !== undefined && campaign.voucherFixedAmount !== null && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Valor do Desconto (Fixo)</p>
+                    <p className="mt-1 text-sm text-gray-900">
+                      {campaign.voucherFixedAmount.toLocaleString("pt-MZ")} MT
                     </p>
                   </div>
                 )}

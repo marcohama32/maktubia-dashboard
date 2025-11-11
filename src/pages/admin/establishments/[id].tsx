@@ -773,13 +773,14 @@ export default function EstablishmentDetailsPage() {
                   const userEmail = merchantUser?.email || "";
                   const userPhone = merchantUser?.phone || "";
                   // Verificar permissões - pode estar em permissions (camelCase ou snake_case)
+                  const merchantUserPermissions = (merchantUser as any)?.permissions;
                   const canCreateCampaigns = merchant.can_create_campaigns || 
-                    merchantUser?.permissions?.canCreateCampaigns ||
-                    merchantUser?.permissions?.can_create_campaigns || 
+                    merchantUserPermissions?.canCreateCampaigns ||
+                    merchantUserPermissions?.can_create_campaigns || 
                     false;
                   const canSetCustomPoints = merchant.can_set_custom_points || 
-                    merchantUser?.permissions?.canSetCustomPoints ||
-                    merchantUser?.permissions?.can_set_custom_points || 
+                    merchantUserPermissions?.canSetCustomPoints ||
+                    merchantUserPermissions?.can_set_custom_points || 
                     false;
                   
                   return (

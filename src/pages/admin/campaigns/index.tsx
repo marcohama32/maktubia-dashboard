@@ -797,18 +797,18 @@ function CampaignsByStatusChart({ campaigns }: { campaigns: Campaign[] }) {
     return <p className="text-sm text-gray-500 text-center py-8">Sem dados para exibir</p>;
   }
 
+  const PieChartComponent = PieChart as any;
+  const PieComponent = Pie as any;
+  
   return (
-    // @ts-ignore - Recharts type incompatibility with React 18
-    <ResponsiveContainer width="100%" height={120}>
-      {/* @ts-ignore - Recharts type incompatibility with React 18 */}
-      <PieChart>
-        {/* @ts-ignore - Recharts type incompatibility with React 18 */}
-        <Pie
+    <ResponsiveContainer width="100%" height={120} as any>
+      <PieChartComponent>
+        <PieComponent
           data={statusData}
           cx="50%"
           cy="50%"
           labelLine={false}
-          label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+          label={({ percent }: any) => `${(percent * 100).toFixed(0)}%`}
           outerRadius={45}
           fill="#8884d8"
           dataKey="value"
@@ -816,10 +816,10 @@ function CampaignsByStatusChart({ campaigns }: { campaigns: Campaign[] }) {
           {statusData.map((entry, index) => (
             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
           ))}
-        </Pie>
+        </PieComponent>
         <Tooltip />
         <Legend wrapperStyle={{ fontSize: "10px" }} iconSize={8} />
-      </PieChart>
+      </PieChartComponent>
     </ResponsiveContainer>
   );
 }
@@ -845,18 +845,18 @@ function CampaignsByTypeChart({ campaigns }: { campaigns: Campaign[] }) {
     return <p className="text-sm text-gray-500 text-center py-8">Sem dados para exibir</p>;
   }
 
+  const PieChartComponent = PieChart as any;
+  const PieComponent = Pie as any;
+  
   return (
-    // @ts-ignore - Recharts type incompatibility with React 18
-    <ResponsiveContainer width="100%" height={200}>
-      {/* @ts-ignore - Recharts type incompatibility with React 18 */}
-      <PieChart>
-        {/* @ts-ignore - Recharts type incompatibility with React 18 */}
-        <Pie
+    <ResponsiveContainer width="100%" height={200} as any>
+      <PieChartComponent>
+        <PieComponent
           data={typeData}
           cx="50%"
           cy="50%"
           labelLine={false}
-          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+          label={({ name, percent }: any) => `${name}: ${(percent * 100).toFixed(0)}%`}
           outerRadius={60}
           fill="#8884d8"
           dataKey="value"
@@ -864,10 +864,10 @@ function CampaignsByTypeChart({ campaigns }: { campaigns: Campaign[] }) {
           {typeData.map((entry, index) => (
             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
           ))}
-        </Pie>
+        </PieComponent>
         <Tooltip />
         <Legend wrapperStyle={{ fontSize: "12px" }} />
-      </PieChart>
+      </PieChartComponent>
     </ResponsiveContainer>
   );
 }
@@ -896,18 +896,18 @@ function PurchasesByStatusChart({ metrics }: { metrics: any }) {
     return <p className="text-sm text-gray-500 text-center py-8">Sem dados para exibir</p>;
   }
 
+  const PieChartComponent = PieChart as any;
+  const PieComponent = Pie as any;
+  
   return (
-    // @ts-ignore - Recharts type incompatibility with React 18
-    <ResponsiveContainer width="100%" height={200}>
-      {/* @ts-ignore - Recharts type incompatibility with React 18 */}
-      <PieChart>
-        {/* @ts-ignore - Recharts type incompatibility with React 18 */}
-        <Pie
+    <ResponsiveContainer width="100%" height={200} as any>
+      <PieChartComponent>
+        <PieComponent
           data={purchaseData}
           cx="50%"
           cy="50%"
           labelLine={false}
-          label={({ name, percent, value }) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}
+          label={({ name, percent, value }: any) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}
           outerRadius={60}
           fill="#8884d8"
           dataKey="value"
@@ -915,10 +915,10 @@ function PurchasesByStatusChart({ metrics }: { metrics: any }) {
           {purchaseData.map((entry, index) => (
             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
           ))}
-        </Pie>
+        </PieComponent>
         <Tooltip />
         <Legend wrapperStyle={{ fontSize: "12px" }} />
-      </PieChart>
+      </PieChartComponent>
     </ResponsiveContainer>
   );
 }

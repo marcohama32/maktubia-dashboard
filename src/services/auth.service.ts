@@ -174,7 +174,7 @@ export const authService = {
         statistics: userData.statistics,
         // Dados de pontos do wallet
         points: userData.wallet?.points || userData.profile?.points || 0,
-        level: userData.profile?.level || 'bronze',
+        level: userData.profile?.level || "bronze",
         balance: userData.wallet?.balance || 0,
         ...userData
       } as User;

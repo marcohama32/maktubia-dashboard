@@ -182,7 +182,8 @@ export default function EditCampaignPage() {
 
     // Validar permissão para editar campanha (apenas para merchants)
     const establishmentId = campaign.establishment_id || campaign.establishmentId;
-    if (!isAdmin(user) && establishmentId && !canCreateCampaign(establishmentId)) {
+    const establishmentIdNumber = establishmentId ? Number(establishmentId) : undefined;
+    if (!isAdmin(user) && establishmentIdNumber && !canCreateCampaign(establishmentIdNumber)) {
       setAlertConfig({
         title: "Erro!",
         message: "Você não tem permissão para editar campanhas deste estabelecimento. Entre em contato com o administrador.",

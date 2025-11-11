@@ -6,11 +6,15 @@ import { establishmentService } from "@/services/establishment.service";
 import { ConfirmModal } from "@/components/modals/ConfirmModal";
 import { AlertModal } from "@/components/modals/AlertModal";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { useAuth } from "@/contexts/AuthContext";
+import { isAdmin } from "@/utils/roleUtils";
 
 const ITEMS_PER_PAGE = 10;
 
 function MerchantsPageContent() {
   const router = useRouter();
+  const { user } = useAuth();
+  const userIsAdmin = isAdmin(user);
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [establishments, setEstablishments] = useState<any[]>([]);

@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { merchantsService, Merchant } from "@/services/merchants.service";
 import { establishmentService, Establishment } from "@/services/establishment.service";
-import { userService } from "@/services/user.service";
 import { useAuth } from "@/contexts/AuthContext";
 import { isAdmin } from "@/utils/roleUtils";
 import { AlertModal } from "@/components/modals/AlertModal";

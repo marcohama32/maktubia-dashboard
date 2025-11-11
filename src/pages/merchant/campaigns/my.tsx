@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/AuthContext";
 import { campaignsService, Campaign } from "@/services/campaigns.service";
@@ -130,7 +130,7 @@ function MyCampaignsPageContent() {
       
       setAlertConfig({
         title: "Sucesso!",
-        message: `A campanha foi eliminada com sucesso.`,
+        message: "A campanha foi eliminada com sucesso.",
         type: "success",
       });
       setAlertModalOpen(true);

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { merchantsService, Merchant, GetAllMerchantsParams } from "@/services/merchants.service";
 import { userService } from "@/services/user.service";
@@ -565,7 +565,7 @@ function MerchantsPageContent() {
         if (userName) {
           message += `\nUsuário: ${userName}`;
         }
-        message += `\n\nEsta ação não pode ser desfeita.`;
+        message += "\n\nEsta ação não pode ser desfeita.";
         break;
       case "grantCampaign":
         message = `Conceder permissão de criar campanhas?\n\nEstabelecimento: ${establishmentName}`;

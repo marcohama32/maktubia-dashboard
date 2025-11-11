@@ -86,7 +86,7 @@ export function AlertModal({
         <div
           className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
           onClick={onClose}
-          style={{ pointerEvents: 'auto' }}
+          style={{ pointerEvents: "auto" }}
         ></div>
 
         {/* Center modal */}

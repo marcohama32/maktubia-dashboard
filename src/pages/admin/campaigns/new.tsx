@@ -857,7 +857,7 @@ export default function NewCampaignPage() {
         
         // 4️⃣ RewardType_Quiz (Questões)
         ...(formData.type === "RewardType_Quiz" && {
-          ...(formData.quiz_questions && { quiz_questions: typeof formData.quiz_questions === 'string' ? formData.quiz_questions : JSON.stringify(formData.quiz_questions) }),
+          ...(formData.quiz_questions && { quiz_questions: typeof formData.quiz_questions === "string" ? formData.quiz_questions : JSON.stringify(formData.quiz_questions) }),
           ...(formData.quiz_points_per_correct !== undefined && formData.quiz_points_per_correct !== null && { quiz_points_per_correct: formData.quiz_points_per_correct }),
           ...(formData.quiz_max_attempts !== undefined && formData.quiz_max_attempts !== null && { quiz_max_attempts: formData.quiz_max_attempts }),
           ...(formData.quiz_time_limit_seconds !== undefined && formData.quiz_time_limit_seconds !== null && { quiz_time_limit_seconds: formData.quiz_time_limit_seconds }),

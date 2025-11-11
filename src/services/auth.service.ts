@@ -48,7 +48,7 @@ export const authService = {
         responseData.token ||
         response.data?.token || 
         response.data?.data?.token ||
-        response.data?.authorization?.value?.replace('Bearer ', '') ||
+        response.data?.authorization?.value?.replace("Bearer ", "") ||
         response.data?.authorization?.token;
       
       if (!token) {

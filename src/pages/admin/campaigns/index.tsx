@@ -235,7 +235,7 @@ function CampaignsPageContent() {
       
       setAlertConfig({
         title: "Sucesso!",
-        message: `A campanha foi eliminada com sucesso.`,
+        message: "A campanha foi eliminada com sucesso.",
         type: "success",
       });
       setAlertModalOpen(true);
@@ -815,7 +815,7 @@ function CampaignsByStatusChart({ campaigns }: { campaigns: Campaign[] }) {
           ))}
         </Pie>
         <Tooltip />
-        <Legend wrapperStyle={{ fontSize: '10px' }} iconSize={8} />
+        <Legend wrapperStyle={{ fontSize: "10px" }} iconSize={8} />
       </PieChart>
     </ResponsiveContainer>
   );
@@ -860,7 +860,7 @@ function CampaignsByTypeChart({ campaigns }: { campaigns: Campaign[] }) {
           ))}
         </Pie>
         <Tooltip />
-        <Legend wrapperStyle={{ fontSize: '12px' }} />
+        <Legend wrapperStyle={{ fontSize: "12px" }} />
       </PieChart>
     </ResponsiveContainer>
   );
@@ -908,7 +908,7 @@ function PurchasesByStatusChart({ metrics }: { metrics: any }) {
           ))}
         </Pie>
         <Tooltip />
-        <Legend wrapperStyle={{ fontSize: '12px' }} />
+        <Legend wrapperStyle={{ fontSize: "12px" }} />
       </PieChart>
     </ResponsiveContainer>
   );

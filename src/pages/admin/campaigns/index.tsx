@@ -118,7 +118,9 @@ function CampaignsPageContent() {
         const params: GetAllCampaignsParams = {
           page: currentPage,
           limit: ITEMS_PER_PAGE,
-          status: statusFilter || undefined,
+          status: (statusFilter && ["active", "inactive", "cancelled", "expired"].includes(statusFilter)) 
+            ? statusFilter as "active" | "inactive" | "cancelled" | "expired" 
+            : undefined,
           establishment_id: establishmentFilter ? Number(establishmentFilter) : undefined,
           type: typeFilter || undefined,
           search: searchTerm || undefined,

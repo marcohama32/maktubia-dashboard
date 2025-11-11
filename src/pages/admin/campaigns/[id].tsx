@@ -1019,6 +1019,7 @@ export default function CampaignDetailsPage() {
                     <p className="mt-1 text-sm text-gray-900">{campaign.voucherMinPurchase.toLocaleString("pt-MZ")} MT</p>
                   </div>
                 )}
+                {/* Tipo de Desconto - Voucher */}
                 {((campaign.voucherPercentage !== undefined && campaign.voucherPercentage !== null) || 
                   (campaign.voucherFixedAmount !== undefined && campaign.voucherFixedAmount !== null)) && (
                   <div>

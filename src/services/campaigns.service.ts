@@ -350,13 +350,15 @@ export const campaignsService = {
    * Buscar campanhas do merchant autenticado
    * GET /api/campaigns/my
    */
-  async getMyCampaigns(params?: { page?: number; limit?: number; status?: string; establishment_id?: number }): Promise<CampaignsResponse> {
+  async getMyCampaigns(params?: { page?: number; limit?: number; status?: string; establishment_id?: number; type?: string; search?: string }): Promise<CampaignsResponse> {
     try {
       const queryParams: any = {};
       if (params?.page !== undefined) queryParams.page = params.page;
       if (params?.limit !== undefined) queryParams.limit = params.limit;
       if (params?.establishment_id !== undefined) queryParams.establishment_id = params.establishment_id;
       if (params?.status) queryParams.status = params.status;
+      if (params?.type) queryParams.type = params.type;
+      if (params?.search) queryParams.search = params.search;
 
       const response = await api.get("/campaigns/my", { params: queryParams });
 

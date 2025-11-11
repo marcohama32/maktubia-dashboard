@@ -105,12 +105,20 @@ function CampaignsPageContent() {
     setCurrentPage(1);
   }, [statusFilter, establishmentFilter, typeFilter, searchTerm]);
 
+  // Helper function para validar e converter status
+  const getValidStatus = (status: string | undefined): "active" | "inactive" | "cancelled" | "expired" | undefined => {
+    if (!status) return undefined;
+    const validStatuses = ["active", "inactive", "cancelled", "expired"];
+    return validStatuses.includes(status) ? status as "active" | "inactive" | "cancelled" | "expired" : undefined;
+  };
+
   const loadCampaigns = async () => {
     try {
       setLoading(true);
       setError("");
       
       let response: any;
+      const validStatus = getValidStatus(statusFilter);
       
       // Se for admin, carregar todas as campanhas
       if (isAdmin(user)) {
@@ -118,9 +126,7 @@ function CampaignsPageContent() {
         const params: GetAllCampaignsParams = {
           page: currentPage,
           limit: ITEMS_PER_PAGE,
-          status: (statusFilter && ["active", "inactive", "cancelled", "expired"].includes(statusFilter)) 
-            ? statusFilter as "active" | "inactive" | "cancelled" | "expired" 
-            : undefined,
+          status: validStatus,
           establishment_id: establishmentFilter ? Number(establishmentFilter) : undefined,
           type: typeFilter || undefined,
           search: searchTerm || undefined,
@@ -133,7 +139,7 @@ function CampaignsPageContent() {
         response = await campaignsService.getMyCampaigns({
           page: currentPage,
           limit: ITEMS_PER_PAGE,
-          status: statusFilter || undefined,
+          status: validStatus,
           establishment_id: establishmentFilter ? Number(establishmentFilter) : undefined,
           type: typeFilter || undefined,
           search: searchTerm || undefined,
@@ -146,7 +152,7 @@ function CampaignsPageContent() {
           response = await campaignsService.getMyCampaigns({
             page: currentPage,
             limit: ITEMS_PER_PAGE,
-            status: statusFilter || undefined,
+            status: validStatus,
             establishment_id: establishmentFilter ? Number(establishmentFilter) : undefined,
             type: typeFilter || undefined,
             search: searchTerm || undefined,
@@ -157,7 +163,7 @@ function CampaignsPageContent() {
           const params: GetAllCampaignsParams = {
             page: currentPage,
             limit: ITEMS_PER_PAGE,
-            status: statusFilter || undefined,
+            status: validStatus,
             establishment_id: establishmentFilter ? Number(establishmentFilter) : undefined,
             type: typeFilter || undefined,
             search: searchTerm || undefined,

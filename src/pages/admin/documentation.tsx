@@ -313,6 +313,7 @@ export default function DocumentationPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* Seção 5: Usuários */}
       <div id="usuarios" className="rounded-lg bg-white p-6 shadow-md">

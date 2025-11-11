@@ -846,7 +846,7 @@ export default function EstablishmentDetailsPage() {
                       <div className="mt-4 flex gap-2">
                         <button
                           onClick={() => {
-                            const merchantId = merchant.merchant_id || merchant.id || merchantUser?.id;
+                            const merchantId = merchant.merchant_id || (merchant as any).id || merchantUser?.id;
                             if (merchantId) {
                               router.push(`/admin/merchants/${merchantId}`);
                             } else {

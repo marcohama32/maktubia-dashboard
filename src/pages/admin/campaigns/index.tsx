@@ -798,10 +798,11 @@ function CampaignsByStatusChart({ campaigns }: { campaigns: Campaign[] }) {
   }
 
   return (
-    // @ts-expect-error - Recharts type incompatibility with React 18
+    // @ts-ignore - Recharts type incompatibility with React 18
     <ResponsiveContainer width="100%" height={120}>
-      {/* @ts-expect-error - Recharts type incompatibility with React 18 */}
+      {/* @ts-ignore - Recharts type incompatibility with React 18 */}
       <PieChart>
+        {/* @ts-ignore - Recharts type incompatibility with React 18 */}
         <Pie
           data={statusData}
           cx="50%"
@@ -845,10 +846,11 @@ function CampaignsByTypeChart({ campaigns }: { campaigns: Campaign[] }) {
   }
 
   return (
-    // @ts-expect-error - Recharts type incompatibility with React 18
+    // @ts-ignore - Recharts type incompatibility with React 18
     <ResponsiveContainer width="100%" height={200}>
-      {/* @ts-expect-error - Recharts type incompatibility with React 18 */}
+      {/* @ts-ignore - Recharts type incompatibility with React 18 */}
       <PieChart>
+        {/* @ts-ignore - Recharts type incompatibility with React 18 */}
         <Pie
           data={typeData}
           cx="50%"
@@ -895,10 +897,11 @@ function PurchasesByStatusChart({ metrics }: { metrics: any }) {
   }
 
   return (
-    // @ts-expect-error - Recharts type incompatibility with React 18
+    // @ts-ignore - Recharts type incompatibility with React 18
     <ResponsiveContainer width="100%" height={200}>
-      {/* @ts-expect-error - Recharts type incompatibility with React 18 */}
+      {/* @ts-ignore - Recharts type incompatibility with React 18 */}
       <PieChart>
+        {/* @ts-ignore - Recharts type incompatibility with React 18 */}
         <Pie
           data={purchaseData}
           cx="50%"

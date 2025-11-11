@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
 
 interface AlertModalProps {
   isOpen: boolean;
@@ -76,13 +77,16 @@ export function AlertModal({
 
   const config = typeConfig[type];
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+  if (!isOpen) return null;
+
+  const modalContent = (
+    <div className="fixed inset-0 z-[9999] overflow-y-auto">
       <div className="flex min-h-screen items-center justify-center px-4 pb-20 pt-4 text-center sm:block sm:p-0">
         {/* Background overlay */}
         <div
           className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
           onClick={onClose}
+          style={{ pointerEvents: 'auto' }}
         ></div>
 
         {/* Center modal */}
@@ -91,7 +95,11 @@ export function AlertModal({
         </span>
 
         {/* Modal panel */}
-        <div className="inline-block overflow-hidden rounded-lg bg-white text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
+        <div 
+          className="relative inline-block overflow-hidden rounded-lg bg-white text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle"
+          style={{ pointerEvents: 'auto', zIndex: 10000 }}
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
             <div className="sm:flex sm:items-start">
               <div className={`mx-auto flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${config.iconBg} sm:mx-0 sm:h-10 sm:w-10`}>
@@ -122,5 +130,12 @@ export function AlertModal({
       </div>
     </div>
   );
+
+  // Renderizar usando portal para garantir que o modal fique acima de tudo
+  if (typeof window !== "undefined") {
+    return createPortal(modalContent, document.body);
+  }
+  
+  return null;
 }
 

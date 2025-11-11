@@ -39,10 +39,14 @@ if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
 
 // Interceptor para adicionar token em todas as requisições
 api.interceptors.request.use((config) => {
-  // Log apenas em desenvolvimento
+  // Log apenas em desenvolvimento (mas não para requisições que sabemos que vão falhar)
+  // Verificar se já tivemos erros de rede recentemente
   if (process.env.NODE_ENV === "development") {
-    const fullUrl = `${config.baseURL || ""}${config.url || ""}`;
-    console.log(`📤 Requisição: ${config.method?.toUpperCase()} ${fullUrl}`);
+    const hasRecentNetworkError = (window as any).__networkErrorLogged;
+    if (!hasRecentNetworkError) {
+      const fullUrl = `${config.baseURL || ""}${config.url || ""}`;
+      console.log(`📤 Requisição: ${config.method?.toUpperCase()} ${fullUrl}`);
+    }
   }
   
   // Verifica se está no cliente antes de acessar localStorage
@@ -72,10 +76,33 @@ api.interceptors.response.use(
     const fullUrl = `${error.config?.baseURL || ""}${url || ""}`;
     const method = error.config?.method?.toUpperCase() || "GET";
     
+    // Detectar erros de rede (backend não disponível)
+    const isNetworkError = !error.response && (
+      error.message === "Network Error" || 
+      error.code === "ERR_NETWORK" ||
+      error.message?.includes("ERR_CONNECTION_REFUSED") ||
+      error.message?.includes("Failed to fetch")
+    );
+    
     // Não logar erros 404 de endpoints opcionais (notificações, etc)
     const isOptionalEndpoint = url === "/notifications" || url?.includes("/notifications");
     
-    if (!isOptionalEndpoint || _status !== 404) {
+    // Para erros de rede, não logar nada (apenas marcar o erro)
+    // Os logs nativos do navegador (net::ERR_CONNECTION_REFUSED) não podem ser suprimidos
+    if (isNetworkError) {
+      // Marcar que tivemos erro de rede para suprimir logs futuros de requisição
+      if (typeof window !== "undefined") {
+        (window as any).__networkErrorLogged = true;
+        // Reset após 10 segundos para permitir logs futuros se o backend voltar
+        setTimeout(() => {
+          (window as any).__networkErrorLogged = false;
+        }, 10000);
+      }
+      // Adicionar flag de erro de rede no objeto de erro para serviços detectarem
+      // Não logar nada aqui - apenas deixar que o navegador mostre os logs nativos
+      error.isNetworkError = true;
+      error.networkErrorMessage = "Servidor não disponível. Verifique se o backend está rodando.";
+    } else if (!isOptionalEndpoint || _status !== 404) {
       // Log detalhado do erro apenas se não for endpoint opcional com 404
       console.error(`❌ Erro na requisição: ${method} ${fullUrl}`);
       console.error(`   Status: ${_status}`);
@@ -85,16 +112,34 @@ api.interceptors.response.use(
     }
     
     if (_status === 401) {
-      // Se receber 401 e não for login, limpar token e redirecionar
+      // Se receber 401 e não for login, verificar se é um erro de autenticação real
       if (typeof window !== "undefined") {
         const currentPath = window.location.pathname;
         // Não limpar token se já estiver na página de login
         if (currentPath !== "/login" && url !== "/users/login" && !url?.includes("/login")) {
-          // Limpar token inválido
-          localStorage.removeItem("auth_token");
-          // Redirecionar para login apenas se não estiver já lá
-          if (currentPath !== "/login") {
-            window.location.href = "/login";
+          // Log para debug
+          console.warn("⚠️ [API] Erro 401 recebido:", {
+            url: fullUrl,
+            currentPath,
+            errorData: error.response?.data,
+          });
+          
+          // Verificar se é um erro de permissão (403) ou autenticação (401)
+          // Se for 401 em /users/me, pode ser token inválido
+          // Se for 401 em outros endpoints, pode ser falta de permissão
+          const isMeEndpoint = url === "/users/me" || url?.includes("/users/me");
+          
+          if (isMeEndpoint) {
+            // Token inválido - limpar e redirecionar
+            console.warn("⚠️ [API] Token inválido detectado em /users/me - limpando token");
+            localStorage.removeItem("auth_token");
+            if (currentPath !== "/login") {
+              window.location.href = "/login";
+            }
+          } else {
+            // Pode ser erro de permissão - não limpar token automaticamente
+            // Deixar o componente tratar o erro
+            console.warn("⚠️ [API] Erro 401 em endpoint não crítico - mantendo token");
           }
         }
       }

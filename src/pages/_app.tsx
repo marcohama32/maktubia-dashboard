@@ -6,6 +6,7 @@ import { DashboardLayout } from "@/dashboard/Layout";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { RouteGuard } from "@/components/RouteGuard";
 import { useRouter } from "next/router";
 
 // Pages that should skip the dashboard layout
@@ -199,13 +200,15 @@ function MyApp({ Component, pageProps }: AppProps) {
             <link rel="shortcut icon" href="/images/logo2.png" type="image/png" />
             <link rel="apple-touch-icon" href="/images/logo2.png" />
           </Head>
-          {noAuth ? (
-            <Component {...pageProps} />
-          ) : (
-            <DashboardLayout>
+          <RouteGuard>
+            {noAuth ? (
               <Component {...pageProps} />
-            </DashboardLayout>
-          )}
+            ) : (
+              <DashboardLayout>
+                <Component {...pageProps} />
+              </DashboardLayout>
+            )}
+          </RouteGuard>
         </NotificationProvider>
       </AuthProvider>
     </ErrorBoundary>

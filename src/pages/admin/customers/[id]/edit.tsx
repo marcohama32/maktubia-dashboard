@@ -1,6 +1,14 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { customerService, UpdateCustomerDTO } from "@/services/customer.service";
+import {
+  validateMozambiquePhone,
+  validateDocumentNumber,
+  formatDocumentNumber,
+  formatMozambiquePhone,
+  MOZAMBIQUE_DOCUMENT_TYPES,
+  DocumentType,
+} from "@/utils/mozambiqueValidators";
 
 export default function EditCustomerPage() {
   const router = useRouter();
@@ -8,13 +16,17 @@ export default function EditCustomerPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>("");
-  const [formData, setFormData] = useState<UpdateCustomerDTO>({
+  const [phoneError, setPhoneError] = useState<string>("");
+  const [documentError, setDocumentError] = useState<string>("");
+  const [formData, setFormData] = useState<UpdateCustomerDTO & { documentType: DocumentType; documentNumber: string }>({
     firstName: "",
     lastName: "",
     username: "",
     email: "",
     phone: "",
     bi: "",
+    documentType: "BI",
+    documentNumber: "",
     isActive: true,
   });
   const [password, setPassword] = useState<string>("");
@@ -31,6 +43,32 @@ export default function EditCustomerPage() {
       setError("");
       const data = await customerService.getById(customerId);
       
+      // Detectar tipo de documento - priorizar tipo_documento do backend, senão inferir do formato
+      let documentType: DocumentType = "BI";
+      let documentNumber = (data as any).numero_documento || data.bi || "";
+      
+      // Se o backend retornou tipo_documento, usar ele
+      if ((data as any).tipo_documento) {
+        documentType = (data as any).tipo_documento as DocumentType;
+      } else if (documentNumber) {
+        // Se não houver tipo_documento, inferir do formato do número
+        // Se BI tem 13 dígitos, é BI
+        if (/^\d{13}$/.test(documentNumber.replace(/\s+/g, ""))) {
+          documentType = "BI";
+        } else if (/^\d{9}$/.test(documentNumber.replace(/\s+/g, ""))) {
+          // Se tem 9 dígitos, pode ser NUIT
+          documentType = "NUIT";
+        } else if (/^[A-Z0-9]{6,9}$/i.test(documentNumber.replace(/\s+/g, ""))) {
+          // Se tem 6-9 caracteres alfanuméricos, pode ser Passaporte
+          documentType = "Passaporte";
+        } else if (/^[A-Z0-9]{8,10}$/i.test(documentNumber.replace(/\s+/g, ""))) {
+          // Se tem 8-10 caracteres alfanuméricos, pode ser Carta de Condução
+          documentType = "Carta de Condução";
+        } else {
+          documentType = "Outro";
+        }
+      }
+      
       setFormData({
         firstName: data.firstName || "",
         lastName: data.lastName || "",
@@ -38,6 +76,8 @@ export default function EditCustomerPage() {
         email: data.email || "",
         phone: data.phone || "",
         bi: data.bi || "",
+        documentType: documentType,
+        documentNumber: documentNumber,
         isActive: data.isActive !== false,
       });
       setPassword(""); // Não carregar senha (por segurança)
@@ -52,6 +92,8 @@ export default function EditCustomerPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setPhoneError("");
+    setDocumentError("");
 
     if (!formData.firstName?.trim() && !formData.lastName?.trim()) {
       setError("Nome (primeiro nome ou último nome) é obrigatório");
@@ -63,10 +105,42 @@ export default function EditCustomerPage() {
       return;
     }
 
+    // Validar telefone
+    if (formData.phone) {
+      const phoneValidation = validateMozambiquePhone(formData.phone);
+      if (!phoneValidation.isValid) {
+        setPhoneError(phoneValidation.error || "Telefone inválido");
+        return;
+      }
+    }
+
+    // Validar documento
+    if (formData.documentNumber) {
+      const documentValidation = validateDocumentNumber(formData.documentType, formData.documentNumber);
+      if (!documentValidation.isValid) {
+        setDocumentError(documentValidation.error || "Documento inválido");
+        return;
+      }
+    }
+
     try {
       setSaving(true);
       
-      const dataToSend: UpdateCustomerDTO = { ...formData };
+      const dataToSend: UpdateCustomerDTO & { tipo_documento?: string; numero_documento?: string } = {
+        ...formData,
+        phone: formData.phone ? formatMozambiquePhone(formData.phone) : undefined,
+        // Enviar tipo_documento e numero_documento (novos campos do backend)
+        tipo_documento: formData.documentType && formData.documentNumber ? formData.documentType : undefined,
+        numero_documento: formData.documentNumber 
+          ? formatDocumentNumber(formData.documentType, formData.documentNumber).replace(/\s+/g, "")
+          : undefined,
+        // Manter bi para compatibilidade (se não houver tipo_documento/numero_documento)
+        bi: !formData.documentType && !formData.documentNumber && formData.bi 
+          ? formData.bi 
+          : (formData.documentType === "BI" && formData.documentNumber 
+            ? formatDocumentNumber("BI", formData.documentNumber).replace(/\s+/g, "")
+            : undefined),
+      };
       
       // Só adiciona senha se foi preenchida
       if (password && password.trim().length > 0) {
@@ -90,10 +164,58 @@ export default function EditCustomerPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    
+    // Limpar erros quando o usuário começar a digitar
+    if (name === "phone") {
+      setPhoneError("");
+    }
+    if (name === "documentNumber" || name === "documentType") {
+      setDocumentError("");
+    }
+    
+    setFormData((prev) => {
+      const newData = {
+        ...prev,
+        [name]: value,
+      };
+      
+      // Se mudou o tipo de documento, limpar o número do documento
+      if (name === "documentType") {
+        newData.documentNumber = "";
+      }
+      
+      return newData;
+    });
+  };
+
+  const handlePhoneBlur = () => {
+    if (formData.phone) {
+      const validation = validateMozambiquePhone(formData.phone);
+      if (!validation.isValid) {
+        setPhoneError(validation.error || "Telefone inválido");
+      } else {
+        // Formatar telefone quando válido
+        setFormData(prev => ({
+          ...prev,
+          phone: formatMozambiquePhone(prev.phone),
+        }));
+      }
+    }
+  };
+
+  const handleDocumentBlur = () => {
+    if (formData.documentNumber) {
+      const validation = validateDocumentNumber(formData.documentType, formData.documentNumber);
+      if (!validation.isValid) {
+        setDocumentError(validation.error || "Documento inválido");
+      } else {
+        // Formatar documento quando válido
+        setFormData(prev => ({
+          ...prev,
+          documentNumber: formatDocumentNumber(prev.documentType, prev.documentNumber),
+        }));
+      }
+    }
   };
 
   if (loading) {
@@ -195,23 +317,84 @@ export default function EditCustomerPage() {
                 name="phone"
                 value={formData.phone || ""}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                onBlur={handlePhoneBlur}
+                placeholder="+258841234567 ou 841234567"
+                className={`mt-1 block w-full rounded-md border ${
+                  phoneError ? "border-red-300" : "border-gray-300"
+                } px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500`}
               />
+              {phoneError && (
+                <p className="mt-1 text-xs text-red-600">{phoneError}</p>
+              )}
+              {!phoneError && formData.phone && (
+                <p className="mt-1 text-xs text-gray-500">
+                  Formato: +258XXXXXXXX ou 8XXXXXXXX (operadoras: 82-88)
+                </p>
+              )}
             </div>
 
             <div>
-              <label htmlFor="bi" className="block text-sm font-medium text-gray-700">
-                Bilhete de Identidade (BI)
+              <label htmlFor="documentType" className="block text-sm font-medium text-gray-700">
+                Tipo de Documento
               </label>
-              <input
-                type="text"
-                id="bi"
-                name="bi"
-                value={formData.bi || ""}
+              <select
+                id="documentType"
+                name="documentType"
+                value={formData.documentType}
                 onChange={handleChange}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-              />
+              >
+                {MOZAMBIQUE_DOCUMENT_TYPES.map((docType) => (
+                  <option key={docType.value} value={docType.value}>
+                    {docType.label}
+                  </option>
+                ))}
+              </select>
             </div>
+          </div>
+
+          <div>
+            <label htmlFor="documentNumber" className="block text-sm font-medium text-gray-700">
+              Número do Documento
+            </label>
+            <input
+              type="text"
+              id="documentNumber"
+              name="documentNumber"
+              value={formData.documentNumber || ""}
+              onChange={handleChange}
+              onBlur={handleDocumentBlur}
+              placeholder={
+                formData.documentType === "BI"
+                  ? "13 dígitos (ex: 1234567890123)"
+                  : formData.documentType === "NUIT"
+                  ? "9 dígitos (ex: 123456789)"
+                  : formData.documentType === "Passaporte"
+                  ? "6-9 caracteres alfanuméricos"
+                  : formData.documentType === "Carta de Condução"
+                  ? "8-10 caracteres alfanuméricos"
+                  : "Número do documento"
+              }
+              className={`mt-1 block w-full rounded-md border ${
+                documentError ? "border-red-300" : "border-gray-300"
+              } px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500`}
+            />
+            {documentError && (
+              <p className="mt-1 text-xs text-red-600">{documentError}</p>
+            )}
+            {!documentError && formData.documentType && (
+              <p className="mt-1 text-xs text-gray-500">
+                {formData.documentType === "BI"
+                  ? "BI: 13 dígitos numéricos"
+                  : formData.documentType === "NUIT"
+                  ? "NUIT: 9 dígitos numéricos"
+                  : formData.documentType === "Passaporte"
+                  ? "Passaporte: 6-9 caracteres alfanuméricos"
+                  : formData.documentType === "Carta de Condução"
+                  ? "Carta de Condução: 8-10 caracteres alfanuméricos"
+                  : "Digite o número do documento"}
+              </p>
+            )}
           </div>
 
           <div>

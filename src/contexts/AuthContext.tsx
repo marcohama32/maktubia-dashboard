@@ -63,20 +63,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setIsAuthenticated(true);
         } catch (error: any) {
           const status = error?.response?.status;
-          console.warn("Erro ao verificar token:", status, error?.message);
+          const isNetworkError = error.isNetworkError || error.message === "Network Error" || error.code === "ERR_NETWORK";
           
-          if (status === 401 || status === 403) {
-            // Token inválido ou sem permissão, removemos o token
-            localStorage.removeItem("auth_token");
-            setIsAuthenticated(false);
-            setUser(null);
-            // Não redirecionar aqui, deixar o interceptor do axios fazer isso
-            // para evitar loops de redirecionamento
+          // Não logar erros de rede (já logado no interceptor do axios)
+          if (!isNetworkError) {
+            console.warn("Erro ao verificar token:", status, error?.message);
+          }
+          
+          if (status === 401) {
+            // Verificar se é erro em /users/me (token inválido) ou outro endpoint (permissão)
+            const url = error?.config?.url || "";
+            const isMeEndpoint = url.includes("/users/me");
+            
+            if (isMeEndpoint) {
+              // Token inválido - limpar e deslogar
+              console.warn("⚠️ [AUTH] Token inválido detectado em /users/me");
+              localStorage.removeItem("auth_token");
+              setIsAuthenticated(false);
+              setUser(null);
+              // Não redirecionar aqui, deixar o interceptor do axios fazer isso
+            } else {
+              // Pode ser erro de permissão em outro endpoint - não deslogar
+              console.warn("⚠️ [AUTH] Erro 401 em endpoint não crítico - mantendo autenticação");
+              // Manter autenticação baseada no token existente
+              setIsAuthenticated(true);
+            }
+          } else if (status === 403) {
+            // Erro de permissão - não deslogar, apenas avisar
+            console.warn("⚠️ [AUTH] Erro 403 - sem permissão, mas mantendo autenticação");
+            // Manter autenticação - o usuário pode não ter permissão para aquele endpoint específico
+            setIsAuthenticated(true);
           } else {
             // Outros erros (500, 404, rede, etc) - assume que o token pode ser válido
             // Permite que o usuário continue usando a aplicação
             // O token pode estar válido, só o endpoint que está com problema
-            console.warn(`Erro ${status} - assumindo token válido por enquanto`);
+            if (!isNetworkError) {
+              console.warn(`Erro ${status} - assumindo token válido por enquanto`);
+            }
             setIsAuthenticated(true);
             // Define um usuário genérico para permitir que a aplicação continue
             setUser({
@@ -115,10 +138,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
+    // Limpar estado primeiro
     authService.logout();
     setUser(null);
     setIsAuthenticated(false);
-    router.push("/login");
+    
+    // Usar window.location para garantir um redirecionamento limpo
+    // Isso evita conflitos com RouteGuard e ProtectedRoute
+    if (typeof window !== "undefined") {
+      window.location.href = "/login";
+    }
   };
 
   return (

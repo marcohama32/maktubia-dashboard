@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
 import { establishmentService, Establishment } from "@/services/establishment.service";
+import { merchantsService, Merchant } from "@/services/merchants.service";
 import { processImageUrl } from "@/utils/imageUrl";
 import { QRCodeSVG } from "qrcode.react";
 
@@ -8,6 +9,8 @@ export default function EstablishmentDetailsPage() {
   const router = useRouter();
   const { id } = router.query;
   const [establishment, setEstablishment] = useState<Establishment | null>(null);
+  const [merchants, setMerchants] = useState<Merchant[]>([]);
+  const [loadingMerchants, setLoadingMerchants] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -26,6 +29,17 @@ export default function EstablishmentDetailsPage() {
       }
     }
   }, [id]);
+
+  // Verificar se há aviso para mostrar sobre merchant
+  useEffect(() => {
+    const { show_merchant_warning } = router.query;
+    if (show_merchant_warning === "true" && establishment && merchants.length === 0) {
+      // Mostrar aviso após carregar merchants
+      setTimeout(() => {
+        alert("⚠️ ATENÇÃO: Este estabelecimento não possui merchants alocados. Por favor, aloque pelo menos um merchant para que o estabelecimento possa ser gerenciado.");
+      }, 1000);
+    }
+  }, [establishment, merchants, router.query]);
 
   // Função para baixar QR code como PNG
   const downloadQRCode = async () => {
@@ -232,11 +246,48 @@ export default function EstablishmentDetailsPage() {
       setError("");
       const data = await establishmentService.getById(establishmentId);
       setEstablishment(data);
+      
+      // Se a API retornar users no estabelecimento, usar diretamente
+      if (data.users && Array.isArray(data.users) && data.users.length > 0) {
+        console.log("✅ [ESTABLISHMENT] Usando users da resposta da API:", data.users.length);
+        // Converter users para formato de merchants
+        const merchantsFromUsers = data.users.map((user: any) => ({
+          merchant_id: user.merchant_id || user.id,
+          user_id: user.id,
+          establishment_id: establishmentId,
+          can_create_campaigns: user.permissions?.canCreateCampaigns || user.permissions?.can_create_campaigns || false,
+          can_set_custom_points: user.permissions?.canSetCustomPoints || user.permissions?.can_set_custom_points || false,
+          is_active: user.isActive !== false,
+          user: user,
+          users: [user],
+        }));
+        setMerchants(merchantsFromUsers);
+      } else {
+        // Se não houver users na resposta, carregar via API separada
+        console.log("⚠️ [ESTABLISHMENT] Nenhum user na resposta, carregando via API separada");
+        loadMerchants(establishmentId);
+      }
     } catch (err: any) {
       console.error("❌ Erro ao carregar estabelecimento:", err);
       setError(err.message || "Erro ao carregar estabelecimento");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMerchants = async (establishmentId: number) => {
+    try {
+      setLoadingMerchants(true);
+      const response = await merchantsService.getMerchantsByEstablishment({
+        establishmentId,
+        limit: 100,
+      });
+      setMerchants(response.data || []);
+    } catch (err: any) {
+      console.error("❌ Erro ao carregar merchants:", err);
+      // Não bloquear a página se falhar ao carregar merchants
+    } finally {
+      setLoadingMerchants(false);
     }
   };
 
@@ -673,6 +724,156 @@ export default function EstablishmentDetailsPage() {
               </div>
             </div>
           )}
+
+          {/* Merchants Alocados */}
+          <div className="mb-6 border-t border-gray-200 pt-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900">Merchants Alocados</h2>
+              <button
+                onClick={() => router.push(`/admin/merchants/new?establishment_id=${establishment.id}`)}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              >
+                + Alocar Merchant
+              </button>
+            </div>
+            {loadingMerchants ? (
+              <div className="py-8 text-center">
+                <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
+                <p className="mt-2 text-sm text-gray-500">Carregando merchants...</p>
+              </div>
+            ) : merchants.length === 0 ? (
+              <div className="rounded-lg border-2 border-dashed border-yellow-300 bg-yellow-50 p-8 text-center">
+                <svg className="mx-auto h-12 w-12 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <p className="mt-4 text-sm font-semibold text-yellow-900">⚠️ ATENÇÃO: Nenhum merchant alocado</p>
+                <p className="mt-2 text-sm text-yellow-700">
+                  Este estabelecimento não possui merchants alocados. É necessário alocar pelo menos um merchant para que o estabelecimento possa ser gerenciado e campanhas possam ser criadas.
+                </p>
+                <button
+                  onClick={() => router.push(`/admin/merchants/new?establishment_id=${establishment.id}`)}
+                  className="mt-4 rounded-lg bg-blue-600 px-6 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                >
+                  + Alocar Primeiro Merchant
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {merchants.map((merchant, index) => {
+                  // Extrair informações do usuário (pode estar em users[] ou user)
+                  const merchantUser = merchant.users && merchant.users.length > 0 
+                    ? merchant.users[0] 
+                    : merchant.user;
+                  
+                  const userName = merchantUser?.fullName || 
+                    `${merchantUser?.firstName || ""} ${merchantUser?.lastName || ""}`.trim() || 
+                    merchantUser?.username || 
+                    "Usuário desconhecido";
+                  
+                  const userEmail = merchantUser?.email || "";
+                  const userPhone = merchantUser?.phone || "";
+                  // Verificar permissões - pode estar em permissions (camelCase ou snake_case)
+                  const canCreateCampaigns = merchant.can_create_campaigns || 
+                    merchantUser?.permissions?.canCreateCampaigns ||
+                    merchantUser?.permissions?.can_create_campaigns || 
+                    false;
+                  const canSetCustomPoints = merchant.can_set_custom_points || 
+                    merchantUser?.permissions?.canSetCustomPoints ||
+                    merchantUser?.permissions?.can_set_custom_points || 
+                    false;
+                  
+                  return (
+                    <div key={merchant.merchant_id || merchant.id} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-900">{userName}</h3>
+                          {userEmail && (
+                            <p className="mt-1 text-sm text-gray-500">{userEmail}</p>
+                          )}
+                          {userPhone && (
+                            <p className="mt-1 text-xs text-gray-400">{userPhone}</p>
+                          )}
+                        </div>
+                        {(merchant.is_active !== false && merchantUser?.isActive !== false) ? (
+                          <span className="inline-flex rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-800">
+                            Ativo
+                          </span>
+                        ) : (
+                          <span className="inline-flex rounded-full bg-red-100 px-2 py-1 text-xs font-semibold text-red-800">
+                            Inativo
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="mt-3 space-y-2">
+                        <div className="flex items-center gap-2 text-sm">
+                          {canCreateCampaigns ? (
+                            <span className="inline-flex items-center gap-1 text-green-700">
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              Pode criar campanhas
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-gray-500">
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                              Não pode criar campanhas
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          {canSetCustomPoints ? (
+                            <span className="inline-flex items-center gap-1 text-green-700">
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              Pode definir pontos personalizados
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-gray-500">
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                              Não pode definir pontos personalizados
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="mt-4 flex gap-2">
+                        <button
+                          onClick={() => {
+                            const merchantId = merchant.merchant_id || merchant.id || merchantUser?.id;
+                            if (merchantId) {
+                              router.push(`/admin/merchants/${merchantId}`);
+                            } else {
+                              console.warn("Merchant ID não encontrado:", merchant);
+                            }
+                          }}
+                          className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                        >
+                          Ver Detalhes
+                        </button>
+                        {merchantUser?.id && (
+                          <button
+                            onClick={() => router.push(`/admin/users/${merchantUser.id}`)}
+                            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                            title="Ver usuário"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           {/* Métricas */}
           {establishment.metrics && (

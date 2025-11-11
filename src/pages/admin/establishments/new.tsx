@@ -86,10 +86,26 @@ export default function NewEstablishmentPage() {
         throw new Error(errorData.message || errorData.error || `Erro ao criar estabelecimento (${response.status})`);
       }
 
-      await response.json();
+      const result = await response.json();
+      const createdEstablishment = result.data || result;
+      const establishmentId = createdEstablishment.id || createdEstablishment.establishment_id;
       
-      // Redireciona para a lista de estabelecimentos
-      router.push("/admin/establishments");
+      // Verificar se há establishment_id na query (para alocar merchant automaticamente)
+      const { establishment_id } = router.query;
+      if (establishment_id && establishmentId) {
+        // Redirecionar para alocar merchant
+        router.push(`/admin/merchants/new?establishment_id=${establishmentId}`);
+        return;
+      }
+      
+      // Se não houver merchant alocado, mostrar aviso e redirecionar para alocar
+      if (establishmentId) {
+        // Redirecionar para detalhes do estabelecimento com aviso
+        router.push(`/admin/establishments/${establishmentId}?show_merchant_warning=true`);
+      } else {
+        // Redireciona para a lista de estabelecimentos
+        router.push("/admin/establishments");
+      }
     } catch (err: any) {
       setError(err.message || "Erro ao criar estabelecimento");
     } finally {

@@ -70,12 +70,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       const response = await notificationService.getNotifications();
       
       if (response.success && response.data) {
-        const convertedNotifications = response.data.map(convertNotification);
+        // Garantir que response.data é um array antes de chamar .map()
+        const notificationsArray = Array.isArray(response.data) ? response.data : [];
+        const convertedNotifications = notificationsArray.map(convertNotification);
         setNotifications(convertedNotifications);
+      } else if (response.data && !Array.isArray(response.data)) {
+        // Se response.data existe mas não é array, pode ser um objeto ou outro formato
+        console.warn("⚠️ Formato de resposta de notificações inesperado:", response.data);
+        setNotifications([]);
       }
     } catch (error) {
       console.error("Erro ao carregar notificações:", error);
       // Não é crítico se falhar, as notificações podem vir apenas via WebSocket
+      setNotifications([]);
     } finally {
       setLoading(false);
     }

@@ -10,11 +10,12 @@ export interface User {
   email?: string;
   phone?: string;
   bi?: string | null; // Bilhete de Identidade (Mozambican ID)
-  role?: string | { name?: string; description?: string; [key: string]: any };
+  role?: string | { id?: number; name?: string; description?: string; [key: string]: any };
   isActive?: boolean;
   lastLogin?: string | null;
   points?: number;
   level?: string;
+  balance?: number;
   pointsToNextLevel?: number;
   permissions?: any;
   createdBy?: {
@@ -23,12 +24,98 @@ export interface User {
     fullName?: string;
     role?: string;
   } | null;
+  // Nova estrutura de métricas de pontos (não mais loans)
   metrics?: {
+    totalPurchases?: number;
+    totalSpent?: number;
+    firstPurchaseDate?: string | null;
+    lastPurchaseDate?: string | null;
+    maxPurchaseAmount?: number;
+    minPurchaseAmount?: number;
+    uniqueEstablishmentsVisited?: number;
+    totalPointTransactions?: number;
+    pointsEarned?: number;
+    pointsSpent?: number;
+    pointsBalance?: number;
+    transfers?: {
+      sent?: number;
+      received?: number;
+      pointsTransferredOut?: number;
+      pointsTransferredIn?: number;
+    };
+    rewards?: {
+      redeemed?: number;
+      pointsSpent?: number;
+    };
+    daysSinceLastLogin?: number | null;
+    daysSinceRegistration?: number;
+    activityStatus?: string;
+    // Métricas antigas (para funcionários)
     total_actions?: number;
     total_customers_created?: number;
     total_loans_created?: number;
     days_since_last_login?: number | null;
     activity_status?: string;
+  };
+  // Dados adicionais do /users/me
+  profile?: {
+    userId?: string;
+    name?: string;
+    phone?: string;
+    email?: string;
+    level?: string;
+    createdAt?: string;
+    updatedAt?: string;
+  } | null;
+  wallet?: {
+    userId?: string;
+    balance?: number;
+    points?: number;
+    updatedAt?: string;
+  } | null;
+  friends?: {
+    total?: number;
+    list?: Array<{
+      user_id?: number;
+      friend_id?: number;
+      name?: string;
+      user_code?: string;
+      phone?: string;
+      email?: string;
+      friendship_date?: string;
+      last_interaction_at?: string;
+    }>;
+  };
+  friend_requests?: {
+    total?: number;
+    list?: Array<any>;
+  };
+  recent_transfers?: Array<any>;
+  recent_transactions?: Array<any>;
+  recent_purchases?: Array<any>;
+  statistics?: {
+    friends?: {
+      total?: number;
+      pending_requests?: number;
+    };
+    transfers?: {
+      sent?: number;
+      received?: number;
+      points_sent?: number;
+      points_received?: number;
+    };
+    purchases?: {
+      total?: number;
+      confirmed?: number;
+      pending?: number;
+      total_points_earned?: number;
+      pending_points?: number;
+    };
+    wallet?: {
+      balance?: number;
+      points?: number;
+      total_points?: number;
+    };
   };
   createdAt?: string;
   updatedAt?: string;
@@ -44,12 +131,17 @@ export interface CreateUserDTO {
   email?: string;
   phone?: string;
   bi?: string;
+  tipo_documento?: string;
+  numero_documento?: string;
   password?: string;
   role?: string;
   isActive?: boolean;
 }
 
-export interface UpdateUserDTO extends Partial<CreateUserDTO> {}
+export interface UpdateUserDTO extends Partial<CreateUserDTO> {
+  tipo_documento?: string;
+  numero_documento?: string;
+}
 
 export interface UsersResponse {
   success: boolean;
@@ -124,7 +216,11 @@ export const userService = {
       const data = err?.response?.data;
       let message = "Erro ao buscar usuários";
       
-      if (_status === 500) {
+      // Detectar erros de rede
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 500) {
         message = "Erro no servidor. Por favor, verifique o backend ou contacte o administrador.";
         if (data?.message) {
           message += ` Detalhes: ${data.message}`;
@@ -139,7 +235,12 @@ export const userService = {
         message = err.message;
       }
       
-      throw new Error(message);
+      const error = new Error(message);
+      // Preservar flag de erro de rede
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
     }
   },
 
@@ -149,27 +250,24 @@ export const userService = {
       
       let user: User;
       
-      // O backend retorna: { success: true, data: {...} }
-      if (response.data?.data && typeof response.data.data === "object") {
-        user = response.data.data;
-      } else if (response.data && typeof response.data === "object" && "id" in response.data) {
-        user = response.data;
-      } else {
-        console.error("Formato de resposta inesperado:", response.data);
-        throw new Error("Formato de resposta inesperado do backend");
-      }
+      // Nova estrutura: { success: true, data: {...} }
+      const userData = response.data?.data || response.data || {};
       
-      // Adiciona 'name' para compatibilidade com código existente
+      // Normalizar para o formato esperado pelo frontend
       return {
-        ...user,
-        name: user.fullName || `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username || "Sem nome",
-      };
+        ...userData,
+        name: userData.fullName || `${userData.firstName || ""} ${userData.lastName || ""}`.trim() || userData.username || "Sem nome",
+      } as User;
     } catch (err: any) {
       const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao buscar usuário";
       
-      if (_status === 500) {
+      // Detectar erros de rede
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 500) {
         message = "Erro no servidor. Por favor, verifique o backend ou contacte o administrador.";
         if (data?.message) {
           message += ` Detalhes: ${data.message}`;
@@ -184,98 +282,114 @@ export const userService = {
         message = err.message;
       }
       
-      throw new Error(message);
+      const error = new Error(message);
+      // Preservar flag de erro de rede
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
     }
   },
 
   async create(data: CreateUserDTO): Promise<User> {
     try {
-      const response = await api.post<User>("/users", data);
-      return response.data;
+      // O backend aceita name ou firstName/lastName e normaliza para first_name/last_name
+      // O backend também aceita role (nome) e converte para role_id
+      
+      // Log do payload para debug
+      console.log("📤 [USER SERVICE] Enviando dados para criar usuário:", {
+        username: data.username,
+        name: data.name,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        phone: data.phone,
+        tipo_documento: (data as any).tipo_documento,
+        numero_documento: (data as any).numero_documento,
+        bi: data.bi,
+        role: data.role,
+        isActive: data.isActive,
+        hasPassword: !!data.password,
+      });
+      
+      const response = await api.post<any>("/users", data);
+      
+      // Nova estrutura: { success: true, data: {...}, message: "..." }
+      const userData = response.data?.data || response.data || {};
+      
+      // Normalizar para o formato esperado pelo frontend
+      return {
+        ...userData,
+        name: userData.fullName || `${userData.firstName || ""} ${userData.lastName || ""}`.trim() || userData.username || "Sem nome",
+      } as User;
     } catch (err: any) {
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao criar usuário";
-      if (data) {
+      
+      // Detectar erros de rede
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 400) {
+        message = data?.message || data?.error || "Dados inválidos ou campos obrigatórios ausentes";
+      } else if (_status === 409) {
+        message = data?.message || data?.error || "Username ou email já existem";
+      } else if (data) {
         message = data.message || data.error || JSON.stringify(data) || message;
       } else if (err?.message) {
         message = err.message;
       }
-      throw new Error(message);
+      
+      const error = new Error(message);
+      // Preservar flag de erro de rede
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
     }
   },
 
   async update(id: number, data: UpdateUserDTO): Promise<User> {
     try {
-      // Transformar dados para o formato que o backend espera
-      const backendData: any = {};
+      // O backend normaliza automaticamente:
+      // - firstName/lastName ou name -> first_name/last_name
+      // - role (nome) -> role_id
+      // - isActive -> is_active
+      // Podemos enviar no formato camelCase que o backend trata
+      const backendData: any = { ...data };
       
-      // Se houver firstName e lastName, combinar em name
-      if (data.firstName || data.lastName) {
-        backendData.name = `${data.firstName || ""} ${data.lastName || ""}`.trim();
-      } else if (data.name) {
-        backendData.name = data.name;
-      }
-      
-      // Adicionar outros campos se fornecidos (o backend aceita todos esses campos)
-      if (data.username !== undefined && data.username !== null && data.username !== "") {
-        backendData.username = data.username;
-      }
-      if (data.email !== undefined && data.email !== null && data.email !== "") {
-        backendData.email = data.email;
-      }
-      if (data.phone !== undefined && data.phone !== null && data.phone !== "") {
-        backendData.phone = data.phone;
-      }
-      if (data.bi !== undefined && data.bi !== null && data.bi !== "") {
-        backendData.bi = data.bi;
-      }
-      if (data.role !== undefined && data.role !== null && data.role !== "") {
-        backendData.role = data.role;
-      }
-      if (data.isActive !== undefined) {
-        backendData.isActive = data.isActive;
-      }
-      if (data.password !== undefined && data.password !== null && data.password !== "") {
-        backendData.password = data.password;
-      }
-      
-      // Garantir que name e isActive estejam presentes (campos obrigatórios)
-      if (!backendData.name) {
-        throw new Error("Nome é obrigatório para atualização");
-      }
-      if (backendData.isActive === undefined) {
-        backendData.isActive = true;
-      }
-      
-      console.log("📤 Enviando para backend:", backendData);
+      // O backend aceita firstName/lastName diretamente e converte internamente
+      // Não precisamos converter aqui, o backend faz isso
       
       const response = await api.put<any>(`/users/${id}`, backendData);
       
-      // O backend pode retornar { success: true, data: {...} } ou direto o objeto
-      let user: User;
+      // Nova estrutura: { success: true, data: {...}, message: "..." }
+      const userData = response.data?.data || response.data || {};
       
-      if (response.data?.data && typeof response.data.data === "object") {
-        // Formato: { data: {...} } ou { success: true, data: {...} }
-        user = response.data.data;
-      } else if (response.data && typeof response.data === "object" && "id" in response.data) {
-        // Formato direto: {...}
-        user = response.data;
-      } else {
-        console.error("Formato de resposta inesperado:", response.data);
-        throw new Error("Formato de resposta inesperado do backend");
-      }
-      
-      // Adiciona 'name' para compatibilidade com código existente
+      // Normalizar para o formato esperado pelo frontend
       return {
-        ...user,
-        name: user.fullName || `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username || "Sem nome",
-      };
+        ...userData,
+        name: userData.fullName || `${userData.firstName || ""} ${userData.lastName || ""}`.trim() || userData.username || "Sem nome",
+      } as User;
     } catch (err: any) {
+      const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao actualizar usuário";
-      if (data) {
+      
+      // Detectar erros de rede
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 400) {
+        message = data?.message || data?.error || "Dados inválidos";
+      } else if (_status === 404) {
+        message = "Usuário não encontrado";
+      } else if (_status === 409) {
+        message = data?.message || data?.error || "Username ou email já existem";
+      } else if (data) {
         // Se o erro for sobre campos inválidos, mostrar mensagem mais clara
-        if (data.message && data.message.includes("campo") || data.message && data.message.includes("válido")) {
+        if (data.message && (data.message.includes("campo") || data.message.includes("válido"))) {
           message = data.message;
         } else {
           message = data.message || data.error || JSON.stringify(data) || message;
@@ -283,7 +397,13 @@ export const userService = {
       } else if (err?.message) {
         message = err.message;
       }
-      throw new Error(message);
+      
+      const error = new Error(message);
+      // Preservar flag de erro de rede
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
     }
   },
 
@@ -299,6 +419,142 @@ export const userService = {
         message = err.message;
       }
       throw new Error(message);
+    }
+  },
+
+  /**
+   * Obter perfil do usuário logado
+   */
+  async getProfile(): Promise<User> {
+    try {
+      const response = await api.get<any>("/users/profile");
+      
+      // O backend retorna: { success: true, data: {...} }
+      const userData = response.data?.data || response.data || {};
+      
+      return {
+        ...userData,
+        name: userData.fullName || `${userData.firstName || ""} ${userData.lastName || ""}`.trim() || userData.username || "Sem nome",
+      } as User;
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao buscar perfil";
+      
+      if (_status === 401) {
+        message = "Não autorizado. Por favor, faça login novamente.";
+      } else if (_status === 404) {
+        message = "Perfil não encontrado.";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      throw new Error(message);
+    }
+  },
+
+  /**
+   * Atualizar perfil do usuário logado
+   */
+  async updateProfile(data: UpdateUserDTO): Promise<User> {
+    try {
+      const response = await api.put<any>("/users/profile", data);
+      
+      // O backend retorna: { success: true, data: {...} }
+      const userData = response.data?.data || response.data || {};
+      
+      return {
+        ...userData,
+        name: userData.fullName || `${userData.firstName || ""} ${userData.lastName || ""}`.trim() || userData.username || "Sem nome",
+      } as User;
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao atualizar perfil";
+      
+      if (_status === 401) {
+        message = "Não autorizado. Por favor, faça login novamente.";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      throw new Error(message);
+    }
+  },
+
+  /**
+   * Alterar senha do usuário
+   */
+  async changePassword(id: number, currentPassword: string, newPassword: string): Promise<void> {
+    try {
+      await api.put(`/users/${id}/change-password`, {
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao alterar senha";
+      
+      if (_status === 401) {
+        message = "Senha atual incorreta.";
+      } else if (_status === 400) {
+        message = data?.message || data?.error || "Dados inválidos.";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      throw new Error(message);
+    }
+  },
+
+  /**
+   * Obter estatísticas de usuários
+   */
+  async getStats(): Promise<{
+    total_users: number;
+    active_users: number;
+    recent_logins: number;
+    admin_users: number;
+  }> {
+    try {
+      const response = await api.get<any>("/users/stats");
+      
+      // O backend retorna: { success: true, data: {...} }
+      return response.data?.data || response.data || {};
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao buscar estatísticas";
+      
+      if (_status === 401) {
+        message = "Não autorizado. Por favor, faça login novamente.";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      throw new Error(message);
+    }
+  },
+
+  /**
+   * Logout do usuário
+   */
+  async logout(): Promise<void> {
+    try {
+      await api.post("/users/logout");
+    } catch (err: any) {
+      // Logout pode falhar se o token já estiver inválido, mas não é crítico
+      // Não lançar erro para não bloquear o logout local
+      console.warn("Erro ao fazer logout no servidor:", err?.message);
     }
   },
 };

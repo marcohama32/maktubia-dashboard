@@ -1,9 +1,15 @@
 import { useState } from "react";
 import Image from "next/image";
 import Head from "next/head";
+import { useAuth } from "@/contexts/AuthContext";
+import { isAdmin, isMerchant } from "@/utils/roleUtils";
 
 export default function DocumentationPage() {
+  const { user } = useAuth();
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
+  
+  const userIsAdmin = isAdmin(user);
+  const userIsMerchant = isMerchant(user);
 
   const toggleSection = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section);
@@ -43,6 +49,18 @@ export default function DocumentationPage() {
           para clientes e estabelecimentos comerciais em Moçambique. Este sistema permite gerenciar estabelecimentos, 
           clientes, compras, pontos, transferências entre amigos e muito mais.
         </p>
+        {userIsAdmin && (
+          <div className="mt-4 rounded border-l-4 border-blue-500 bg-blue-50 p-4">
+            <p className="font-semibold text-blue-900">👨‍💼 Você está acessando como <strong>Administrador</strong></p>
+            <p className="mt-1 text-sm text-blue-800">Você tem acesso completo a todas as funcionalidades do sistema.</p>
+          </div>
+        )}
+        {userIsMerchant && (
+          <div className="mt-4 rounded border-l-4 border-green-500 bg-green-50 p-4">
+            <p className="font-semibold text-green-900">🏪 Você está acessando como <strong>Merchant</strong></p>
+            <p className="mt-1 text-sm text-green-800">Você tem acesso às funcionalidades específicas para merchants, incluindo gestão de campanhas e visualização de dados dos seus estabelecimentos.</p>
+          </div>
+        )}
       </div>
 
       {/* Índice */}
@@ -52,13 +70,22 @@ export default function DocumentationPage() {
           <li><a href="#inicio-rapido" className="text-blue-600 hover:underline">1. Início Rápido</a></li>
           <li><a href="#login" className="text-blue-600 hover:underline">2. Login e Autenticação</a></li>
           <li><a href="#dashboard" className="text-blue-600 hover:underline">3. Dashboard</a></li>
-          <li><a href="#estabelecimentos" className="text-blue-600 hover:underline">4. Gerenciar Estabelecimentos</a></li>
-          <li><a href="#usuarios" className="text-blue-600 hover:underline">5. Gerenciar Usuários</a></li>
-          <li><a href="#clientes" className="text-blue-600 hover:underline">6. Gerenciar Clientes</a></li>
-          <li><a href="#compras" className="text-blue-600 hover:underline">7. Gerenciar Compras</a></li>
-          <li><a href="#amigos" className="text-blue-600 hover:underline">8. Maktubia Friends</a></li>
-          <li><a href="#transferencias" className="text-blue-600 hover:underline">9. Transferências</a></li>
-          <li><a href="#notificacoes" className="text-blue-600 hover:underline">10. Notificações</a></li>
+          {userIsAdmin && (
+            <>
+              <li><a href="#estabelecimentos" className="text-blue-600 hover:underline">4. Gerenciar Estabelecimentos</a></li>
+              <li><a href="#usuarios" className="text-blue-600 hover:underline">5. Gerenciar Usuários</a></li>
+            </>
+          )}
+          <li><a href="#clientes" className="text-blue-600 hover:underline">{userIsAdmin ? "6" : "4"}. Gerenciar Clientes</a></li>
+          <li><a href="#compras" className="text-blue-600 hover:underline">{userIsAdmin ? "7" : "5"}. Gerenciar Compras</a></li>
+          {userIsAdmin && (
+            <li><a href="#amigos" className="text-blue-600 hover:underline">8. Maktubia Friends</a></li>
+          )}
+          <li><a href="#transferencias" className="text-blue-600 hover:underline">{userIsAdmin ? "9" : "6"}. Transferências</a></li>
+          {userIsMerchant && (
+            <li><a href="#campanhas" className="text-blue-600 hover:underline">7. Gerenciar Campanhas</a></li>
+          )}
+          <li><a href="#notificacoes" className="text-blue-600 hover:underline">{userIsAdmin ? "10" : userIsMerchant ? "8" : "7"}. Notificações</a></li>
         </ul>
       </div>
 
@@ -203,7 +230,8 @@ export default function DocumentationPage() {
         )}
       </div>
 
-      {/* Seção 4: Estabelecimentos */}
+      {/* Seção 4: Estabelecimentos - Apenas Admin */}
+      {userIsAdmin && (
       <div id="estabelecimentos" className="rounded-lg bg-white p-6 shadow-md">
         <h2 
           className="mb-4 flex cursor-pointer items-center justify-between text-2xl font-bold text-gray-900"
@@ -358,42 +386,95 @@ export default function DocumentationPage() {
         </h2>
         {expandedSection === "clientes" && (
           <div className="mt-4 space-y-4 text-gray-700">
-            <p className="leading-relaxed">
-              A seção de Clientes permite gerenciar todos os clientes que participam do programa de pontos.
-            </p>
-            <div className="space-y-3">
-              <div>
-                <p className="mb-2 font-semibold">➕ Cadastrar Novo Cliente:</p>
-                <ol className="ml-4 list-inside list-decimal space-y-1 text-sm">
-                  <li>Clique em <strong>"Novo Cliente"</strong></li>
-                  <li>Preencha os dados pessoais (nome, email, telefone, BI)</li>
-                  <li>O sistema automaticamente define o cliente com role de usuário</li>
-                  <li>Cliente recebe saldo inicial de 0 pontos</li>
-                  <li>Salve o cliente</li>
-                </ol>
-              </div>
-              <div>
-                <p className="mb-2 font-semibold">📊 Visualizar Clientes:</p>
-                <ul className="ml-4 list-inside list-disc space-y-1 text-sm">
-                  <li>A tabela mostra todos os clientes com suas informações principais</li>
-                  <li>Pesquise por nome, email ou telefone</li>
-                  <li>Veja saldo de pontos, status e último login</li>
-                  <li>Acesse detalhes completos clicando em <strong>"Ver Detalhes"</strong></li>
-                </ul>
-              </div>
-              <div>
-                <p className="mb-2 font-semibold">📈 Métricas do Cliente:</p>
-                <p className="ml-4 text-sm">Na página de detalhes, você pode ver:
-                  <ul className="ml-6 mt-1 list-inside list-disc">
-                    <li>Total de compras realizadas</li>
-                    <li>Valor total gasto</li>
-                    <li>Pontos ganhos e gastos</li>
-                    <li>Transferências enviadas e recebidas</li>
-                    <li>Estabelecimentos visitados</li>
-                  </ul>
+            {userIsAdmin ? (
+              <>
+                <p className="leading-relaxed">
+                  A seção de Clientes permite gerenciar todos os clientes que participam do programa de pontos.
                 </p>
-              </div>
-            </div>
+                <div className="space-y-3">
+                  <div>
+                    <p className="mb-2 font-semibold">➕ Cadastrar Novo Cliente:</p>
+                    <ol className="ml-4 list-inside list-decimal space-y-1 text-sm">
+                      <li>Clique em <strong>"Novo Cliente"</strong></li>
+                      <li>Preencha os dados pessoais (nome, email, telefone, BI)</li>
+                      <li>O sistema automaticamente define o cliente com role de usuário</li>
+                      <li>Cliente recebe saldo inicial de 0 pontos</li>
+                      <li>Salve o cliente</li>
+                    </ol>
+                  </div>
+                  <div>
+                    <p className="mb-2 font-semibold">📊 Visualizar Clientes:</p>
+                    <ul className="ml-4 list-inside list-disc space-y-1 text-sm">
+                      <li>A tabela mostra todos os clientes com suas informações principais</li>
+                      <li>Pesquise por nome, email ou telefone</li>
+                      <li>Veja saldo de pontos, status e último login</li>
+                      <li>Acesse detalhes completos clicando em <strong>"Ver Detalhes"</strong></li>
+                    </ul>
+                  </div>
+                  <div>
+                    <p className="mb-2 font-semibold">✏️ Editar Cliente:</p>
+                    <p className="ml-4 text-sm">Na página de detalhes, clique em <strong>"Editar"</strong> para modificar informações do cliente.</p>
+                  </div>
+                  <div>
+                    <p className="mb-2 font-semibold">🗑️ Eliminar Cliente:</p>
+                    <p className="ml-4 text-sm">Na página de detalhes, clique em <strong>"Eliminar"</strong> e confirme a exclusão.</p>
+                  </div>
+                  <div>
+                    <p className="mb-2 font-semibold">📈 Métricas do Cliente:</p>
+                    <p className="ml-4 text-sm">Na página de detalhes, você pode ver:
+                      <ul className="ml-6 mt-1 list-inside list-disc">
+                        <li>Total de compras realizadas</li>
+                        <li>Valor total gasto</li>
+                        <li>Pontos ganhos e gastos</li>
+                        <li>Transferências enviadas e recebidas</li>
+                        <li>Estabelecimentos visitados</li>
+                      </ul>
+                    </p>
+                  </div>
+                </div>
+              </>
+            ) : userIsMerchant ? (
+              <>
+                <p className="leading-relaxed">
+                  A seção de Clientes permite visualizar todos os clientes que participam do programa de pontos.
+                </p>
+                <div className="space-y-3">
+                  <div className="rounded border-l-4 border-yellow-500 bg-yellow-50 p-4">
+                    <p className="mb-1 font-semibold text-yellow-900">⚠️ Permissões Limitadas:</p>
+                    <p className="text-sm text-yellow-800">
+                      Como merchant, você pode visualizar todos os clientes, mas apenas pode editar e eliminar 
+                      clientes que você mesmo criou.
+                    </p>
+                  </div>
+                  <div>
+                    <p className="mb-2 font-semibold">📊 Visualizar Clientes:</p>
+                    <ul className="ml-4 list-inside list-disc space-y-1 text-sm">
+                      <li>A tabela mostra todos os clientes com informações limitadas</li>
+                      <li>Pesquise por nome para encontrar clientes específicos</li>
+                      <li>Veja informações básicas: nome, saldo de pontos, status</li>
+                      <li>Informações sensíveis (email, telefone, BI) são ocultadas para merchants</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <p className="mb-2 font-semibold">✏️ Editar Cliente:</p>
+                    <p className="ml-4 text-sm">
+                      Você pode editar apenas clientes que você criou. Para clientes criados por outros, 
+                      você verá <strong>"Sem permissão"</strong> no lugar dos botões de ação.
+                    </p>
+                  </div>
+                  <div>
+                    <p className="mb-2 font-semibold">➕ Criar Novo Cliente:</p>
+                    <p className="ml-4 text-sm">
+                      Como merchant, você não pode criar novos clientes. Apenas administradores podem criar clientes.
+                    </p>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="leading-relaxed">
+                A seção de Clientes permite visualizar e gerenciar clientes do programa de pontos.
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -477,7 +558,8 @@ export default function DocumentationPage() {
         )}
       </div>
 
-      {/* Seção 8: Maktubia Friends */}
+      {/* Seção 8: Maktubia Friends - Apenas Admin */}
+      {userIsAdmin && (
       <div id="amigos" className="rounded-lg bg-white p-6 shadow-md">
         <h2 
           className="mb-4 flex cursor-pointer items-center justify-between text-2xl font-bold text-gray-900"
@@ -528,6 +610,135 @@ export default function DocumentationPage() {
           </div>
         )}
       </div>
+      )}
+
+      {/* Seção 7: Campanhas - Apenas Merchant */}
+      {userIsMerchant && (
+      <div id="campanhas" className="rounded-lg bg-white p-6 shadow-md">
+        <h2 
+          className="mb-4 flex cursor-pointer items-center justify-between text-2xl font-bold text-gray-900"
+          onClick={() => toggleSection("campanhas")}
+        >
+          <span>7. 🎯 Gerenciar Campanhas</span>
+          <svg 
+            className={`h-6 w-6 transition-transform${expandedSection === "campanhas" ? "rotate-180" : ""}`}
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </h2>
+        {expandedSection === "campanhas" && (
+          <div className="mt-4 space-y-4 text-gray-700">
+            <p className="leading-relaxed">
+              A seção de Campanhas permite criar e gerenciar campanhas promocionais para seus estabelecimentos. 
+              Existem dois tipos de páginas: <strong>Campanhas Públicas</strong> e <strong>Minhas Campanhas</strong>.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <p className="mb-2 font-semibold">📋 Campanhas Públicas:</p>
+                <p className="ml-4 text-sm mb-2">Visualize todas as campanhas públicas disponíveis no sistema:</p>
+                <ul className="ml-6 list-inside list-disc space-y-1 text-sm">
+                  <li>Veja campanhas criadas por outros merchants</li>
+                  <li>Pesquise por nome ou tipo de campanha</li>
+                  <li>Filtre por status (Ativo, Inativo, Rascunho)</li>
+                  <li>Clique em <strong>"Ver Detalhes"</strong> para ver informações completas</li>
+                  <li>Você pode visualizar, mas não pode editar ou eliminar campanhas públicas de outros merchants</li>
+                </ul>
+              </div>
+              <div>
+                <p className="mb-2 font-semibold">🎯 Minhas Campanhas:</p>
+                <p className="ml-4 text-sm mb-2">Gerencie as campanhas que você criou:</p>
+                <ul className="ml-6 list-inside list-disc space-y-1 text-sm">
+                  <li>Veja todas as suas campanhas em uma lista</li>
+                  <li>Filtre por estabelecimento, status ou tipo</li>
+                  <li>Pesquise por nome de campanha</li>
+                  <li>Visualize métricas de cada campanha (participantes, pontos, receita)</li>
+                </ul>
+              </div>
+              <div>
+                <p className="mb-2 font-semibold">➕ Criar Nova Campanha:</p>
+                <ol className="ml-4 list-inside list-decimal space-y-2 text-sm">
+                  <li>Na página <strong>"Minhas Campanhas"</strong>, clique em <strong>"Nova Campanha"</strong></li>
+                  <li>Selecione o tipo de campanha desejado:
+                    <ul className="ml-6 mt-1 list-inside list-disc">
+                      <li><strong>⚡ Oferta Automática:</strong> Ganha pontos automaticamente ao aderir</li>
+                      <li><strong>🎲 Sorteio:</strong> Cada compra dá uma chance de ganhar prémios</li>
+                      <li><strong>🔄 Troca:</strong> Troca pontos por produtos ou descontos</li>
+                      <li><strong>❓ Questões:</strong> Responde perguntas e ganha pontos</li>
+                      <li><strong>👥 Indicação:</strong> Convida amigos e ganha pontos</li>
+                      <li><strong>🏆 Desafio:</strong> Completa desafios e ganha prémios</li>
+                      <li><strong>🎉 Votação:</strong> Vota em eventos e ganha pontos</li>
+                      <li><strong>🎫 Voucher:</strong> Cupons com desconto ou valor fixo</li>
+                    </ul>
+                  </li>
+                  <li>Preencha as informações básicas:
+                    <ul className="ml-6 mt-1 list-inside list-disc">
+                      <li>Selecione o estabelecimento</li>
+                      <li>Nome da campanha</li>
+                      <li>Nome do patrocinador</li>
+                      <li>Data de início e término</li>
+                      <li>Descrição (opcional)</li>
+                    </ul>
+                  </li>
+                  <li>Configure as opções específicas do tipo de campanha escolhido</li>
+                  <li>Configure pontos, limites e recompensas</li>
+                  <li>Adicione imagens da campanha (opcional)</li>
+                  <li>Clique em <strong>"Criar Campanha"</strong></li>
+                </ol>
+              </div>
+              <div>
+                <p className="mb-2 font-semibold">👁️ Ver Detalhes da Campanha:</p>
+                <ol className="ml-4 list-inside list-decimal space-y-1 text-sm">
+                  <li>Clique em <strong>"Ver Detalhes"</strong> em qualquer campanha</li>
+                  <li>Visualize todas as informações:
+                    <ul className="ml-6 mt-1 list-inside list-disc">
+                      <li>Informações básicas e tipo de campanha</li>
+                      <li>Imagens da campanha (com carrossel)</li>
+                      <li>QR Code para download e compartilhamento</li>
+                      <li>Métricas (participantes, pontos, receita, compras)</li>
+                      <li>Configurações específicas do tipo de campanha</li>
+                      <li>Configurações de pontos, compras e recompensas</li>
+                      <li>Restrições e notificações</li>
+                    </ul>
+                  </li>
+                </ol>
+              </div>
+              <div>
+                <p className="mb-2 font-semibold">✏️ Editar Campanha:</p>
+                <ol className="ml-4 list-inside list-decimal space-y-1 text-sm">
+                  <li>Na página de detalhes da sua campanha, clique em <strong>"Editar"</strong></li>
+                  <li>Modifique os campos desejados</li>
+                  <li>Salve as alterações</li>
+                </ol>
+              </div>
+              <div>
+                <p className="mb-2 font-semibold">🔄 Ativar/Desativar Campanha:</p>
+                <p className="ml-4 text-sm">
+                  Na página de detalhes, use o botão <strong>"Ativar"</strong> ou <strong>"Desativar"</strong> 
+                  para controlar o status da campanha.
+                </p>
+              </div>
+              <div>
+                <p className="mb-2 font-semibold">🗑️ Eliminar Campanha:</p>
+                <p className="ml-4 text-sm">
+                  Na página de detalhes, clique em <strong>"Eliminar"</strong> e confirme a exclusão. 
+                  Esta ação não pode ser desfeita.
+                </p>
+              </div>
+              <div className="rounded border-l-4 border-blue-500 bg-blue-50 p-4">
+                <p className="mb-1 font-semibold text-blue-900">💡 Dica:</p>
+                <p className="text-sm text-blue-800">
+                  Use o QR Code da campanha para compartilhar com clientes. Eles podem escanear o código 
+                  para participar da campanha diretamente pelo app mobile.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      )}
 
       {/* Seção 9: Transferências */}
       <div id="transferencias" className="rounded-lg bg-white p-6 shadow-md">

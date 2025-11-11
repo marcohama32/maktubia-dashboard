@@ -32,11 +32,33 @@ export interface Establishment {
   status?: "active" | "inactive";
   campaign?: any;
   campaigns?: any[];
+  users?: Array<{
+    id: number;
+    username?: string;
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+    fullName?: string;
+    phone?: string;
+    isActive?: boolean;
+    permissions?: {
+      canCreateCampaigns?: boolean;
+      can_create_campaigns?: boolean;
+      canSetCustomPoints?: boolean;
+      can_set_custom_points?: boolean;
+      canManageMerchant?: boolean;
+      canManageUsers?: boolean;
+      canViewReports?: boolean;
+    };
+    createdAt?: string;
+    merchant_id?: number;
+  }>;
   metrics?: EstablishmentMetrics;
   createdAt?: string;
   updatedAt?: string;
   created_at?: string;
   updated_at?: string;
+  createdBy?: any;
 }
 
 export interface CreateEstablishmentDTO {
@@ -217,7 +239,11 @@ export const establishmentService = {
       const data = err?.response?.data;
       let message = "Erro ao buscar estabelecimento";
       
-      if (_status === 500) {
+      // Detectar erros de rede
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 500) {
         message = "Erro no servidor. Por favor, verifique o backend ou contacte o administrador.";
         if (data?.message) {
           message += ` Detalhes: ${data.message}`;
@@ -232,13 +258,21 @@ export const establishmentService = {
         message = err.message;
       }
       
-      console.error("Erro ao buscar estabelecimento:", {
-        status: _status,
-        data,
-        error: err
-      });
+      // Log apenas se não for erro de rede (para reduzir console noise)
+      if (!isNetworkError) {
+        console.error("Erro ao buscar estabelecimento:", {
+          status: _status,
+          data,
+          error: err
+        });
+      }
       
-      throw new Error(message);
+      const error = new Error(message);
+      // Preservar flag de erro de rede
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
     }
   },
 

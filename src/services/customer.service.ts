@@ -64,11 +64,16 @@ export interface CreateCustomerDTO {
   email?: string;
   phone?: string;
   bi?: string;
+  tipo_documento?: string;
+  numero_documento?: string;
   password?: string;
   isActive?: boolean;
 }
 
-export interface UpdateCustomerDTO extends Partial<CreateCustomerDTO> {}
+export interface UpdateCustomerDTO extends Partial<CreateCustomerDTO> {
+  tipo_documento?: string;
+  numero_documento?: string;
+}
 
 export interface CustomersResponse {
   success: boolean;
@@ -152,7 +157,11 @@ export const customerService = {
       const data = err?.response?.data;
       let message = "Erro ao buscar clientes";
       
-      if (_status === 500) {
+      // Detectar erros de rede
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 500) {
         message = "Erro no servidor. Por favor, verifique o backend ou contacte o administrador.";
         if (data?.message) {
           message += ` Detalhes: ${data.message}`;
@@ -167,7 +176,12 @@ export const customerService = {
         message = err.message;
       }
       
-      throw new Error(message);
+      const error = new Error(message);
+      // Preservar flag de erro de rede
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
     }
   },
 
@@ -201,7 +215,11 @@ export const customerService = {
       const data = err?.response?.data;
       let message = "Erro ao buscar cliente";
       
-      if (_status === 500) {
+      // Detectar erros de rede
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 500) {
         message = "Erro no servidor. Por favor, verifique o backend ou contacte o administrador.";
         if (data?.message) {
           message += ` Detalhes: ${data.message}`;
@@ -216,111 +234,113 @@ export const customerService = {
         message = err.message;
       }
       
-      throw new Error(message);
+      const error = new Error(message);
+      // Preservar flag de erro de rede
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
     }
   },
 
   async create(data: CreateCustomerDTO): Promise<Customer> {
     try {
-      // Criar cliente é criar um user com role_id = 1
-      // O backend espera first_name, last_name (snake_case) e role: "user"
+      // O backend aceita firstName/lastName ou name e normaliza para first_name/last_name
+      // O backend também aceita role (nome) e converte para role_id
       const payload: any = {
         username: data.username,
         email: data.email,
         password: data.password,
-        first_name: data.firstName || data.name?.split(" ")[0] || "",
-        last_name: data.lastName || data.name?.split(" ").slice(1).join(" ") || "",
+        // Pode enviar firstName/lastName ou name - o backend normaliza
+        firstName: data.firstName,
+        lastName: data.lastName,
+        name: data.name,
         phone: data.phone || null,
         bi: data.bi || null,
-        role: "user", // Garantir que seja role "user" (role_id = 1)
+        role: "user", // Backend converte "user" para role_id = 1
         isActive: data.isActive !== undefined ? data.isActive : true,
       };
       const response = await api.post("/users", payload);
       
-      // O backend pode retornar: { success: true, data: {...} } ou objeto direto
-      let customer: Customer;
-      if (response.data?.success && response.data?.data && typeof response.data.data === "object") {
-        customer = response.data.data;
-      } else if (response.data?.data && typeof response.data.data === "object") {
-        customer = response.data.data;
-      } else if (response.data && typeof response.data === "object" && "id" in response.data) {
-        customer = response.data;
-      } else {
-        console.error("Formato de resposta inesperado:", response.data);
-        throw new Error("Formato de resposta inesperado do backend");
-      }
+      // Nova estrutura: { success: true, data: {...}, message: "..." }
+      const customerData = response.data?.data || response.data || {};
       
-      // Adiciona 'name' para compatibilidade
+      // Normalizar para o formato esperado pelo frontend
       return {
-        ...customer,
-        name: customer.fullName || `${customer.firstName || ""} ${customer.lastName || ""}`.trim() || customer.username || "Sem nome",
-      };
+        ...customerData,
+        name: customerData.fullName || `${customerData.firstName || ""} ${customerData.lastName || ""}`.trim() || customerData.username || "Sem nome",
+      } as Customer;
     } catch (err: any) {
       const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao criar cliente";
-      if (data) {
+      
+      // Detectar erros de rede
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (data) {
         message = data.message || data.error || JSON.stringify(data) || message;
       } else if (err?.message) {
         message = err.message;
       }
-      throw new Error(message);
+      const error = new Error(message);
+      // Preservar flag de erro de rede
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
     }
   },
 
   async update(id: number, data: UpdateCustomerDTO): Promise<Customer> {
     try {
-      // Atualizar cliente é atualizar um user
-      // O backend espera first_name, last_name (snake_case)
-      const payload: any = {};
+      // O backend normaliza automaticamente:
+      // - firstName/lastName ou name -> first_name/last_name
+      // - role (nome) -> role_id
+      // - isActive -> is_active
+      // Podemos enviar no formato camelCase que o backend trata
+      const payload: any = { ...data };
       
-      if (data.username !== undefined) payload.username = data.username;
-      if (data.email !== undefined) payload.email = data.email;
-      if (data.password !== undefined) payload.password = data.password;
-      if (data.firstName !== undefined) payload.first_name = data.firstName;
-      if (data.lastName !== undefined) payload.last_name = data.lastName;
-      if (data.name !== undefined && !data.firstName && !data.lastName) {
-        // Se só name foi fornecido, dividir
-        const nameParts = data.name.trim().split(/\s+/).filter(part => part.length > 0);
-        if (nameParts.length > 0) {
-          payload.first_name = nameParts[0];
-          payload.last_name = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
-        }
-      }
-      if (data.phone !== undefined) payload.phone = data.phone || null;
-      if (data.bi !== undefined) payload.bi = data.bi || null;
-      if (data.isActive !== undefined) payload.isActive = data.isActive;
+      // O backend aceita firstName/lastName diretamente e converte internamente
+      // Não precisamos converter aqui, o backend faz isso
       
       const response = await api.put(`/users/${id}`, payload);
       
-      // O backend pode retornar: { success: true, data: {...} } ou objeto direto
-      let customer: Customer;
-      if (response.data?.success && response.data?.data && typeof response.data.data === "object") {
-        customer = response.data.data;
-      } else if (response.data?.data && typeof response.data.data === "object") {
-        customer = response.data.data;
-      } else if (response.data && typeof response.data === "object" && "id" in response.data) {
-        customer = response.data;
-      } else {
-        console.error("Formato de resposta inesperado:", response.data);
-        throw new Error("Formato de resposta inesperado do backend");
-      }
+      // Nova estrutura: { success: true, data: {...}, message: "..." }
+      const customerData = response.data?.data || response.data || {};
       
-      // Adiciona 'name' para compatibilidade
+      // Normalizar para o formato esperado pelo frontend
       return {
-        ...customer,
-        name: customer.fullName || `${customer.firstName || ""} ${customer.lastName || ""}`.trim() || customer.username || "Sem nome",
-      };
+        ...customerData,
+        name: customerData.fullName || `${customerData.firstName || ""} ${customerData.lastName || ""}`.trim() || customerData.username || "Sem nome",
+      } as Customer;
     } catch (err: any) {
       const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao actualizar cliente";
-      if (data) {
+      
+      // Detectar erros de rede
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 400) {
+        message = data?.message || data?.error || "Dados inválidos";
+      } else if (_status === 404) {
+        message = "Cliente não encontrado";
+      } else if (_status === 409) {
+        message = data?.message || data?.error || "Username ou email já existem";
+      } else if (data) {
         message = data.message || data.error || JSON.stringify(data) || message;
       } else if (err?.message) {
         message = err.message;
       }
-      throw new Error(message);
+      const error = new Error(message);
+      // Preservar flag de erro de rede
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
     }
   },
 
@@ -332,12 +352,22 @@ export const customerService = {
       const _status = err?.response?.status;
       const data = err?.response?.data;
       let message = "Erro ao eliminar cliente";
-      if (data) {
+      
+      // Detectar erros de rede
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (data) {
         message = data.message || data.error || JSON.stringify(data) || message;
       } else if (err?.message) {
         message = err.message;
       }
-      throw new Error(message);
+      const error = new Error(message);
+      // Preservar flag de erro de rede
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
     }
   },
 };

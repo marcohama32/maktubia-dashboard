@@ -3,10 +3,11 @@ import { useRouter } from "next/router";
 import { userService, User } from "@/services/user.service";
 import { ConfirmModal } from "@/components/modals/ConfirmModal";
 import { AlertModal } from "@/components/modals/AlertModal";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 const ITEMS_PER_PAGE = 10;
 
-export default function UsersPage() {
+function UsersPageContent() {
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
@@ -39,7 +40,16 @@ export default function UsersPage() {
       setUsers(response.data);
       setPagination(response.pagination || null);
     } catch (err: any) {
-      console.error("Erro ao carregar usuários:", err);
+      // Não logar erros de rede (já logado no interceptor do axios)
+      // Verificar flag, código de erro ou mensagem que indica erro de rede
+      const isNetworkError = err.isNetworkError || 
+        err.message === "Network Error" || 
+        err.code === "ERR_NETWORK" ||
+        err.message?.includes("Servidor não disponível") ||
+        err.message?.includes("backend está rodando");
+      if (!isNetworkError) {
+        console.error("Erro ao carregar usuários:", err);
+      }
       const errorMessage = err.message || "Erro ao carregar usuários";
       setError(errorMessage);
     } finally {
@@ -452,5 +462,13 @@ export default function UsersPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function UsersPage() {
+  return (
+    <ProtectedRoute requireAdmin={true} redirectTo="/">
+      <UsersPageContent />
+    </ProtectedRoute>
   );
 }

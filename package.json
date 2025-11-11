@@ -23,6 +23,7 @@
     "build:static": "next build",
     "export": "next build",
     "start": "next start",
+    "start:3001": "PORT=3001 next start",
     "lint": "next lint && eslint '*/**/*.{ts,tsx}' --fix",
     "format": "prettier '*/**/*.{ts,tsx}' --write"
   },

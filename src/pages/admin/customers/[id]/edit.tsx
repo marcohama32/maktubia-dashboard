@@ -197,7 +197,7 @@ export default function EditCustomerPage() {
         // Formatar telefone quando válido
         setFormData(prev => ({
           ...prev,
-          phone: formatMozambiquePhone(prev.phone),
+          phone: prev.phone ? formatMozambiquePhone(prev.phone) : prev.phone,
         }));
       }
     }

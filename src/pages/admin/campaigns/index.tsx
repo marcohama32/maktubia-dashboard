@@ -797,11 +797,12 @@ function CampaignsByStatusChart({ campaigns }: { campaigns: Campaign[] }) {
     return <p className="text-sm text-gray-500 text-center py-8">Sem dados para exibir</p>;
   }
 
+  const ResponsiveContainerComponent = ResponsiveContainer as any;
   const PieChartComponent = PieChart as any;
   const PieComponent = Pie as any;
   
   return (
-    <ResponsiveContainer width="100%" height={120} as any>
+    <ResponsiveContainerComponent width="100%" height={120}>
       <PieChartComponent>
         <PieComponent
           data={statusData}
@@ -820,7 +821,7 @@ function CampaignsByStatusChart({ campaigns }: { campaigns: Campaign[] }) {
         <Tooltip />
         <Legend wrapperStyle={{ fontSize: "10px" }} iconSize={8} />
       </PieChartComponent>
-    </ResponsiveContainer>
+    </ResponsiveContainerComponent>
   );
 }
 
@@ -845,11 +846,12 @@ function CampaignsByTypeChart({ campaigns }: { campaigns: Campaign[] }) {
     return <p className="text-sm text-gray-500 text-center py-8">Sem dados para exibir</p>;
   }
 
+  const ResponsiveContainerComponent = ResponsiveContainer as any;
   const PieChartComponent = PieChart as any;
   const PieComponent = Pie as any;
   
   return (
-    <ResponsiveContainer width="100%" height={200} as any>
+    <ResponsiveContainerComponent width="100%" height={200}>
       <PieChartComponent>
         <PieComponent
           data={typeData}
@@ -868,7 +870,7 @@ function CampaignsByTypeChart({ campaigns }: { campaigns: Campaign[] }) {
         <Tooltip />
         <Legend wrapperStyle={{ fontSize: "12px" }} />
       </PieChartComponent>
-    </ResponsiveContainer>
+    </ResponsiveContainerComponent>
   );
 }
 
@@ -896,11 +898,12 @@ function PurchasesByStatusChart({ metrics }: { metrics: any }) {
     return <p className="text-sm text-gray-500 text-center py-8">Sem dados para exibir</p>;
   }
 
+  const ResponsiveContainerComponent = ResponsiveContainer as any;
   const PieChartComponent = PieChart as any;
   const PieComponent = Pie as any;
   
   return (
-    <ResponsiveContainer width="100%" height={200} as any>
+    <ResponsiveContainerComponent width="100%" height={200}>
       <PieChartComponent>
         <PieComponent
           data={purchaseData}
@@ -919,7 +922,7 @@ function PurchasesByStatusChart({ metrics }: { metrics: any }) {
         <Tooltip />
         <Legend wrapperStyle={{ fontSize: "12px" }} />
       </PieChartComponent>
-    </ResponsiveContainer>
+    </ResponsiveContainerComponent>
   );
 }
 

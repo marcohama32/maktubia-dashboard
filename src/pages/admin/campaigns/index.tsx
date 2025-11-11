@@ -800,6 +800,7 @@ function CampaignsByStatusChart({ campaigns }: { campaigns: Campaign[] }) {
   return (
     // @ts-expect-error - Recharts type incompatibility with React 18
     <ResponsiveContainer width="100%" height={120}>
+      {/* @ts-expect-error - Recharts type incompatibility with React 18 */}
       <PieChart>
         <Pie
           data={statusData}
@@ -846,6 +847,7 @@ function CampaignsByTypeChart({ campaigns }: { campaigns: Campaign[] }) {
   return (
     // @ts-expect-error - Recharts type incompatibility with React 18
     <ResponsiveContainer width="100%" height={200}>
+      {/* @ts-expect-error - Recharts type incompatibility with React 18 */}
       <PieChart>
         <Pie
           data={typeData}
@@ -895,6 +897,7 @@ function PurchasesByStatusChart({ metrics }: { metrics: any }) {
   return (
     // @ts-expect-error - Recharts type incompatibility with React 18
     <ResponsiveContainer width="100%" height={200}>
+      {/* @ts-expect-error - Recharts type incompatibility with React 18 */}
       <PieChart>
         <Pie
           data={purchaseData}

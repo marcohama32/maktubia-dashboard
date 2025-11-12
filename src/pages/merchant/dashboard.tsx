@@ -590,7 +590,7 @@ function MerchantDashboardContent() {
               <p className="mt-2 text-3xl font-bold text-gray-900">{formatPoints(metrics.totalPointsGiven)}</p>
               <p className="mt-1 text-sm text-gray-600">
                 {dashboardData?.summary?.points_per_real !== undefined && dashboardData.summary.points_per_real > 0
-                  ? `${formatPoints(dashboardData.summary.points_per_real)} pts por real`
+                  ? `${formatPoints(dashboardData.summary.points_per_real)} pts por metical`
                   : metrics.totalCampaigns > 0 && `Média: ${formatPoints(Math.round(metrics.totalPointsGiven / metrics.totalCampaigns))} por campanha`
                 }
               </p>

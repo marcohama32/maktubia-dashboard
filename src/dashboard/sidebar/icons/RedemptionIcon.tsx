@@ -1,6 +1,6 @@
 import React from "react";
 
-export const TransferIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => {
+export const RedemptionIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => {
   return (
     <svg
       className={className}
@@ -13,8 +13,10 @@ export const TransferIcon: React.FC<{ className?: string }> = ({ className = "w-
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth={2}
-        d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+        d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"
       />
     </svg>
   );
 };
+
+

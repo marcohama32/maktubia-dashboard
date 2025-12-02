@@ -10,6 +10,7 @@ export interface User {
   email?: string;
   phone?: string;
   bi?: string | null; // Bilhete de Identidade (Mozambican ID)
+  user_code?: string; // Código único do usuário
   role?: string | { id?: number; name?: string; description?: string; [key: string]: any };
   isActive?: boolean;
   lastLogin?: string | null;
@@ -131,6 +132,7 @@ export interface CreateUserDTO {
   email?: string;
   phone?: string;
   bi?: string;
+  user_code?: string; // Código único do usuário
   tipo_documento?: string;
   numero_documento?: string;
   password?: string;
@@ -296,8 +298,9 @@ export const userService = {
       // O backend aceita name ou firstName/lastName e normaliza para first_name/last_name
       // O backend também aceita role (nome) e converte para role_id
       
-      // Log do payload para debug
-      console.log("📤 [USER SERVICE] Enviando dados para criar usuário:", {
+      // Log do payload completo para debug
+      console.log("📤 [USER SERVICE] Enviando dados para criar usuário:");
+      console.log(JSON.stringify({
         username: data.username,
         name: data.name,
         firstName: data.firstName,
@@ -310,7 +313,8 @@ export const userService = {
         role: data.role,
         isActive: data.isActive,
         hasPassword: !!data.password,
-      });
+        passwordLength: data.password?.length || 0,
+      }, null, 2));
       
       const response = await api.post<any>("/users", data);
       
@@ -332,7 +336,25 @@ export const userService = {
       if (isNetworkError) {
         message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
       } else if (_status === 400) {
-        message = data?.message || data?.error || "Dados inválidos ou campos obrigatórios ausentes";
+        // Mostrar mensagem de erro mais detalhada do backend
+        if (data?.error) {
+          // Se o erro for sobre senha, destacar que o backend precisa ser ajustado
+          if (data.error.includes('senha') || data.error.includes('password')) {
+            message = `Erro de validação do backend: ${data.error}. O backend está configurado para exigir senhas com no mínimo 6 caracteres e regras complexas, mas o sistema foi configurado para aceitar 4 caracteres. Por favor, ajuste a validação do backend ou use uma senha que atenda aos requisitos do backend.`;
+          } else {
+            message = data.error;
+          }
+        } else if (data?.message) {
+          message = data.message;
+        } else if (data?.details) {
+          message = `Dados inválidos: ${JSON.stringify(data.details)}`;
+        } else if (typeof data === 'string') {
+          message = data;
+        } else {
+          message = "Dados inválidos ou campos obrigatórios ausentes. Verifique o console para mais detalhes.";
+        }
+        console.error("❌ [USER SERVICE] Erro 400 - Detalhes:");
+        console.error(JSON.stringify(data, null, 2));
       } else if (_status === 409) {
         message = data?.message || data?.error || "Username ou email já existem";
       } else if (data) {

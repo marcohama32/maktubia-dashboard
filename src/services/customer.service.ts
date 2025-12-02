@@ -10,6 +10,7 @@ export interface Customer {
   email?: string;
   phone?: string;
   bi?: string | null; // Bilhete de Identidade (Mozambican ID)
+  user_code?: string; // Código único do usuário
   role?: string | { id?: number; name?: string; description?: string; [key: string]: any };
   isActive?: boolean;
   lastLogin?: string | null;
@@ -64,6 +65,7 @@ export interface CreateCustomerDTO {
   email?: string;
   phone?: string;
   bi?: string;
+  user_code?: string; // Código único do usuário
   tipo_documento?: string;
   numero_documento?: string;
   password?: string;

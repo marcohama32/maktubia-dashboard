@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
 import Image from "next/image";
 import { useAuth } from "@/contexts/AuthContext";
+import { isAdmin, isMerchant } from "@/utils/roleUtils";
+import { authService } from "@/services/auth.service";
 
 // mark this page to skip the dashboard layout
 export const noAuth = true;
@@ -9,6 +11,7 @@ export const noAuth = true;
 export default function Login() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [cooldownEnd, setCooldownEnd] = useState<number | null>(null);
@@ -88,9 +91,27 @@ export default function Login() {
       return;
     }
 
+    // Validar que a senha tenha exatamente 4 dígitos numéricos
+    if (!password || password.trim().length !== 4 || !/^\d{4}$/.test(password)) {
+      setError("A senha deve conter exatamente 4 dígitos");
+      return;
+    }
+
     setLoading(true);
     setError("");
     try {
+      // Fazer login diretamente pelo serviço para obter o usuário antes de atualizar o contexto
+      const loginResponse = await authService.login({ identifier, password });
+      
+      // Verificar se o usuário tem role permitida (apenas admin ou merchant)
+      if (loginResponse.user && !isAdmin(loginResponse.user) && !isMerchant(loginResponse.user)) {
+        // Se não for admin nem merchant, não fazer login e mostrar erro
+        setError("Acesso negado. Apenas administradores e comerciantes podem acessar o sistema.");
+        setLoading(false);
+        return;
+      }
+      
+      // Se passou na validação, fazer login no contexto
       await login(identifier, password);
       
       // Verificar se há uma URL de redirecionamento salva (vindo de notificação)
@@ -192,7 +213,7 @@ export default function Login() {
                   required
                   disabled={loading || !!cooldownEnd}
                   className="block w-full appearance-none rounded-lg border border-gray-300 py-2.5 pl-10 pr-3 text-sm placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-blue-500 disabled:opacity-60"
-                  placeholder="seu usuário / BI / telefone"
+                  placeholder="seu usuário / telefone"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                 />
@@ -211,14 +232,44 @@ export default function Login() {
                 <input
                   id="password"
                   name="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
+                  inputMode="numeric"
+                  pattern="[0-9]{4}"
                   required
+                  minLength={4}
+                  maxLength={4}
                   disabled={loading || !!cooldownEnd}
-                  className="block w-full appearance-none rounded-lg border border-gray-300 py-2.5 pl-10 pr-3 text-sm placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-blue-500 disabled:opacity-60"
-                  placeholder="********"
+                  ref={passwordRef}
+                  className="block w-full appearance-none rounded-lg border border-gray-300 py-2.5 pl-10 pr-10 text-sm placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-blue-500 disabled:opacity-60"
+                  placeholder="Digite 4 dígitos"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    // Permitir apenas números
+                    const value = e.target.value.replace(/\D/g, '');
+                    // Limitar a 4 dígitos
+                    if (value.length <= 4) {
+                      setPassword(value);
+                    }
+                  }}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  disabled={loading || !!cooldownEnd}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                >
+                  {showPassword ? (
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    </svg>
+                  ) : (
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
               </div>
             </div>
           </div>

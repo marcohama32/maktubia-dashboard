@@ -184,3 +184,7 @@ O Nginx precisa aceitar conexões do Cloudflare. Configure os IPs do Cloudflare.
 - Ou configure SSL no próprio CDN (Cloudflare)
 
 
+
+
+
+

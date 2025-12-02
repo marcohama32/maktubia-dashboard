@@ -47,3 +47,7 @@ curl http://marcohama.com
 Se retornar HTML, está funcionando. Se retornar erro, o DNS não está propagado ainda.
 
 
+
+
+
+

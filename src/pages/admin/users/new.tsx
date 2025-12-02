@@ -105,8 +105,9 @@ export default function NewUserPage() {
       return;
     }
 
-    if (!formData.password || formData.password.trim().length < 6) {
-      setError("A senha deve ter pelo menos 6 caracteres");
+    // Validar que a senha tenha exatamente 4 caracteres
+    if (!formData.password || formData.password.trim().length !== 4) {
+      setError("A senha deve conter exatamente 4 caracteres");
       return;
     }
 
@@ -137,6 +138,7 @@ export default function NewUserPage() {
       setLoading(true);
       
       // Preparar dados para envio - enviar tipo_documento e numero_documento ao backend
+      // NOTA: user_code é gerado automaticamente pelo backend, não deve ser enviado na criação
       const userData: CreateUserDTO & { tipo_documento?: string; numero_documento?: string } = {
         name: formData.name,
         username: formData.username,
@@ -166,14 +168,34 @@ export default function NewUserPage() {
         }
       });
       
-      console.log("📤 [NEW USER] Dados finais para envio:", userData);
+      console.log("📤 [NEW USER] Dados finais para envio:", JSON.stringify(userData, null, 2));
       
       await userService.create(userData);
       
       // Redireciona para a lista de usuários
       router.push("/admin/users");
     } catch (err: any) {
-      setError(err.message || "Erro ao criar usuário");
+      console.error("❌ [NEW USER] Erro ao criar usuário:", err.message);
+      if (err.response?.data) {
+        console.error("❌ [NEW USER] Detalhes do erro do backend:");
+        console.error(JSON.stringify(err.response.data, null, 2));
+      }
+      
+      // Mostrar mensagem de erro mais detalhada
+      let errorMessage = err.message || "Erro ao criar usuário";
+      if (err.response?.data) {
+        const errorData = err.response.data;
+        if (errorData.message) {
+          errorMessage = errorData.message;
+        } else if (errorData.error) {
+          errorMessage = errorData.error;
+        } else if (typeof errorData === 'string') {
+          errorMessage = errorData;
+        } else if (errorData.details) {
+          errorMessage = `${errorMessage}: ${JSON.stringify(errorData.details)}`;
+        }
+      }
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -226,10 +248,10 @@ export default function NewUserPage() {
       if (!validation.isValid) {
         setDocumentError(validation.error || "Documento inválido");
       } else {
-        // Formatar documento quando válido
+        // Limpar espaços do documento (não formatar visualmente)
         setFormData(prev => ({
           ...prev,
-          documentNumber: formatDocumentNumber(prev.documentType, prev.documentNumber),
+          documentNumber: prev.documentNumber.replace(/\s+/g, "").toUpperCase(),
         }));
       }
     }
@@ -361,13 +383,13 @@ export default function NewUserPage() {
               onBlur={handleDocumentBlur}
               placeholder={
                 formData.documentType === "BI"
-                  ? "13 dígitos (ex: 1234567890123)"
+                  ? "12 dígitos + 1 letra (ex: 123456789456A)"
                   : formData.documentType === "NUIT"
                   ? "9 dígitos (ex: 123456789)"
                   : formData.documentType === "Passaporte"
-                  ? "6-9 caracteres alfanuméricos"
+                  ? "2 letras + 7 números (ex: AB1234567)"
                   : formData.documentType === "Carta de Condução"
-                  ? "8-10 caracteres alfanuméricos"
+                  ? "9 dígitos (ex: 123456789)"
                   : "Número do documento"
               }
               className={`mt-1 block w-full rounded-md border ${
@@ -380,13 +402,13 @@ export default function NewUserPage() {
             {!documentError && formData.documentType && (
               <p className="mt-1 text-xs text-gray-500">
                 {formData.documentType === "BI"
-                  ? "BI: 13 dígitos numéricos"
+                  ? "BI: 12 dígitos + 1 letra (13 caracteres)"
                   : formData.documentType === "NUIT"
                   ? "NUIT: 9 dígitos numéricos"
                   : formData.documentType === "Passaporte"
-                  ? "Passaporte: 6-9 caracteres alfanuméricos"
+                  ? "Passaporte: 2 letras + 7 números"
                   : formData.documentType === "Carta de Condução"
-                  ? "Carta de Condução: 8-10 caracteres alfanuméricos"
+                  ? "Carta de Condução: 9 dígitos numéricos"
                   : "Digite o número do documento"}
               </p>
             )}
@@ -402,12 +424,20 @@ export default function NewUserPage() {
                 id="password"
                 name="password"
                 required
+                minLength={4}
+                maxLength={4}
                 value={formData.password || ""}
-                onChange={handleChange}
-                minLength={6}
+                onChange={(e) => {
+                  // Limitar a 4 caracteres
+                  const value = e.target.value;
+                  if (value.length <= 4) {
+                    setFormData(prev => ({ ...prev, password: value }));
+                  }
+                }}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                placeholder="Digite 4 caracteres"
               />
-              <p className="mt-1 text-xs text-gray-500">Mínimo de 6 caracteres</p>
+              <p className="mt-1 text-xs text-gray-500">A senha deve conter exatamente 4 caracteres (números, letras ou símbolos)</p>
             </div>
 
             <div>

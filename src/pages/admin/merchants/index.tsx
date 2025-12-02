@@ -37,6 +37,13 @@ function MerchantsPageContent() {
   const [merchantToAction, setMerchantToAction] = useState<Merchant | null>(null);
   const [actionType, setActionType] = useState<"delete" | "grantCampaign" | "revokeCampaign" | "grantCustomPoints" | "revokeCustomPoints" | "activate" | "deactivate">("delete");
   const [alertConfig, setAlertConfig] = useState<{ title: string; message: string; type: "success" | "error" | "warning" | "info" } | null>(null);
+  
+  // Estados para modal de adicionar estabelecimento
+  const [addEstablishmentModalOpen, setAddEstablishmentModalOpen] = useState(false);
+  const [selectedUserForEstablishment, setSelectedUserForEstablishment] = useState<any>(null);
+  const [selectedEstablishmentId, setSelectedEstablishmentId] = useState<number | null>(null);
+  const [addEstablishmentLoading, setAddEstablishmentLoading] = useState(false);
+  const [userEstablishments, setUserEstablishments] = useState<number[]>([]);
 
   // Estatísticas
   const [stats, setStats] = useState({
@@ -525,8 +532,105 @@ function MerchantsPageContent() {
     router.push(`/admin/merchants/new?establishment_id=${establishmentId}`);
   };
 
+  const handleAddEstablishmentToMerchant = (merchant: Merchant) => {
+    // Se há usuários, usar o primeiro para adicionar estabelecimento
+    const merchantUsers: any[] = merchant.users || [];
+    if (merchantUsers.length > 0) {
+      const firstUser = merchantUsers[0];
+      handleAddEstablishment(firstUser);
+    } else {
+      // Se não há usuários, redirecionar para criar novo merchant
+      // O usuário poderá selecionar um estabelecimento na página de criação
+      router.push("/admin/merchants/new");
+    }
+  };
+
   const handleCreate = () => {
     router.push("/admin/merchants/new");
+  };
+
+  const handleAddEstablishment = async (user: any) => {
+    setSelectedUserForEstablishment(user);
+    setSelectedEstablishmentId(null);
+    
+    // Buscar estabelecimentos que o user já tem
+    try {
+      const userId = user.user_id || user.id;
+      if (userId) {
+        const response = await merchantsService.getMerchantsByUser({
+          userId,
+          limit: 1000,
+        });
+        const userMerchants = response.data || [];
+        // Extrair IDs dos estabelecimentos
+        const establishmentIds = userMerchants
+          .map((m: any) => m.id || m.establishment_id || m.merchant_id)
+          .filter((id: any) => id && !isNaN(id));
+        setUserEstablishments(establishmentIds);
+      } else {
+        setUserEstablishments([]);
+      }
+    } catch (err) {
+      console.error("Erro ao buscar estabelecimentos do user:", err);
+      setUserEstablishments([]);
+    }
+    
+    setAddEstablishmentModalOpen(true);
+  };
+
+  const handleAddEstablishmentConfirm = async () => {
+    if (!selectedUserForEstablishment || !selectedEstablishmentId) {
+      setAlertConfig({
+        title: "Erro!",
+        message: "Por favor, selecione um estabelecimento.",
+        type: "error",
+      });
+      setAlertModalOpen(true);
+      return;
+    }
+
+    try {
+      setAddEstablishmentLoading(true);
+      setAddEstablishmentModalOpen(false);
+
+      const userId = selectedUserForEstablishment.user_id || selectedUserForEstablishment.id;
+      
+      await merchantsService.create({
+        user_id: userId,
+        establishment_id: selectedEstablishmentId,
+        can_create_campaigns: false,
+        can_set_custom_points: false,
+        is_active: true,
+      });
+
+      await loadMerchants();
+
+      setAlertConfig({
+        title: "Sucesso!",
+        message: "Estabelecimento adicionado ao merchant com sucesso.",
+        type: "success",
+      });
+      setAlertModalOpen(true);
+      
+      setSelectedUserForEstablishment(null);
+      setSelectedEstablishmentId(null);
+    } catch (err: any) {
+      setAlertConfig({
+        title: "Erro!",
+        message: err.message || "Erro ao adicionar estabelecimento. Por favor, tente novamente.",
+        type: "error",
+      });
+      setAlertModalOpen(true);
+    } finally {
+      setAddEstablishmentLoading(false);
+    }
+  };
+
+  const handleAddEstablishmentCancel = () => {
+    setAddEstablishmentModalOpen(false);
+    setSelectedUserForEstablishment(null);
+    setSelectedEstablishmentId(null);
+    setUserEstablishments([]);
   };
 
   const getActionMessage = () => {
@@ -648,12 +752,20 @@ function MerchantsPageContent() {
 
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Merchants</h1>
-        <button
-          onClick={handleCreate}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-        >
-          + Novo Merchant
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => router.push("/admin/establishments/new")}
+            className="rounded-lg bg-green-600 px-4 py-2 text-white transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+          >
+            + Estabelecimento
+          </button>
+          <button
+            onClick={handleCreate}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          >
+            + Novo Merchant
+          </button>
+        </div>
       </div>
 
       {/* Estatísticas */}
@@ -901,34 +1013,82 @@ function MerchantsPageContent() {
                         </div>
                     </td>
                     <td className="whitespace-nowrap px-6 py-4">
-                      <div className="text-sm text-gray-900">
-                        {merchantName}
-                      </div>
-                      {merchantType && (
-                        <div className="text-xs text-gray-500">
-                          {merchantType}
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          {merchantName ? (
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1">
+                                <div className="text-sm text-gray-900">
+                                  {merchantName}
+                                </div>
+                                {merchantType && (
+                                  <div className="text-xs text-gray-500">
+                                    {merchantType}
+                                  </div>
+                                )}
+                                {merchant.campaigns !== undefined && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      const establishmentId = merchant.establishment_id || merchant.merchant_id;
+                                      if (establishmentId && !isNaN(establishmentId)) {
+                                        handleViewCampaigns(merchant);
+                                      } else {
+                                        console.error("ID inválido para ver campanhas:", merchant);
+                                      }
+                                    }}
+                                    disabled={!canEdit || !merchantId}
+                                    className="text-xs text-blue-600 hover:text-blue-800 underline mt-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Ver campanhas deste estabelecimento"
+                                  >
+                                    {merchant.campaigns?.length || 0} campanha{(merchant.campaigns?.length || 0) !== 1 ? "s" : ""}
+                                  </button>
+                                )}
+                              </div>
+                              {canEdit && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (merchantId && !isNaN(merchantId)) {
+                                      handleAddEstablishmentToMerchant(merchant);
+                                    }
+                                  }}
+                                  disabled={!canEdit || addEstablishmentLoading}
+                                  className="text-xs text-blue-600 hover:text-blue-800 underline disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Adicionar estabelecimento"
+                                >
+                                  + Adicionar
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-gray-500">Sem estabelecimento</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  if (merchantId && !isNaN(merchantId)) {
+                                    handleAddEstablishmentToMerchant(merchant);
+                                  } else {
+                                    console.error("Merchant ID inválido para adicionar estabelecimento:", merchant);
+                                  }
+                                }}
+                                disabled={!canEdit || !merchantId}
+                                className="text-xs text-blue-600 hover:text-blue-800 underline disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Adicionar estabelecimento"
+                              >
+                                + Adicionar
+                              </button>
+                            </div>
+                          )}
                         </div>
-                      )}
-                      {merchant.campaigns !== undefined && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            const establishmentId = merchant.establishment_id || merchant.merchant_id;
-                            if (establishmentId && !isNaN(establishmentId)) {
-                              handleViewCampaigns(merchant);
-                            } else {
-                              console.error("ID inválido para ver campanhas:", merchant);
-                            }
-                          }}
-                          disabled={!canEdit || !merchantId}
-                          className="text-xs text-blue-600 hover:text-blue-800 underline mt-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Ver campanhas deste estabelecimento"
-                        >
-                          {merchant.campaigns?.length || 0} campanha{(merchant.campaigns?.length || 0) !== 1 ? "s" : ""}
-                        </button>
-                      )}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="space-y-2">
@@ -1188,6 +1348,70 @@ function MerchantsPageContent() {
         confirmText="OK"
         autoClose={alertConfig?.type === "success" ? 3000 : 0}
       />
+
+      {/* Modal para adicionar estabelecimento */}
+      {addEstablishmentModalOpen && selectedUserForEstablishment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h2 className="mb-4 text-xl font-bold text-gray-900">
+              Adicionar Estabelecimento
+            </h2>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">
+                Merchant: <span className="font-medium text-gray-900">
+                  {selectedUserForEstablishment.fullName || 
+                   `${selectedUserForEstablishment.firstName || selectedUserForEstablishment.first_name || ""} ${selectedUserForEstablishment.lastName || selectedUserForEstablishment.last_name || ""}`.trim() || 
+                   selectedUserForEstablishment.username || 
+                   `ID: ${selectedUserForEstablishment.user_id || selectedUserForEstablishment.id}`}
+                </span>
+              </p>
+            </div>
+
+            <div className="mb-4">
+              <label htmlFor="establishment-select" className="block text-sm font-medium text-gray-700 mb-2">
+                Selecionar Estabelecimento <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="establishment-select"
+                value={selectedEstablishmentId || ""}
+                onChange={(e) => setSelectedEstablishmentId(e.target.value ? Number(e.target.value) : null)}
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                disabled={addEstablishmentLoading || loadingEstablishments}
+              >
+                <option value="">Selecione um estabelecimento...</option>
+                {establishments
+                  .filter(est => {
+                    // Filtrar estabelecimentos que o merchant já tem
+                    return est.id && !userEstablishments.includes(est.id);
+                  })
+                  .map((est) => (
+                    <option key={est.id || `est-${est.id}`} value={est.id}>
+                      {est.name} {est.type ? `(${est.type})` : ""}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={handleAddEstablishmentCancel}
+                disabled={addEstablishmentLoading}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleAddEstablishmentConfirm}
+                disabled={!selectedEstablishmentId || addEstablishmentLoading}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {addEstablishmentLoading ? "Adicionando..." : "Adicionar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

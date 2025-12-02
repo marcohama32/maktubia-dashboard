@@ -1,8 +1,8 @@
 import Link from "next/link";
-import React from "react";
-import { getSidebarData, iconMap } from "./data";
+import React, { useState } from "react";
+import { getSidebarData, iconMap, SidebarItem } from "./data";
 import { useRouter } from "next/router";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { isAdmin, isMerchant, getUserRole } from "@/utils/roleUtils";
 
@@ -21,8 +21,16 @@ const IconRenderer: React.FC<{ iconName: string }> = ({ iconName }) => {
     return null;
   }
   
-  // PurchaseIcon aceita className, outros não
-  if (iconName === "PurchaseIcon") {
+  // Ícones que aceitam className
+  const iconsWithClassName = [
+    "PurchaseIcon",
+    "PointsIcon",
+    "PointsManagementIcon",
+    "RedemptionIcon",
+    "TransferIcon"
+  ];
+  
+  if (iconsWithClassName.includes(iconName)) {
     return <Icon className="w-6 h-6" />;
   }
   
@@ -33,6 +41,64 @@ export function SidebarItems() {
   const router = useRouter();
   const { pathname } = router;
   const { user } = useAuth();
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  
+  // Função para verificar se o link está ativo (incluindo filhos)
+  const isActive = useCallback((item: SidebarItem) => {
+    // Normalizar paths para comparação
+    const normalizedPathname = pathname === "/" ? "/" : pathname.replace(/\/$/, "");
+    const normalizedLink = item.link === "/" ? "/" : item.link.replace(/\/$/, "");
+    
+    // Verificar se o item atual está ativo
+    if (normalizedPathname === normalizedLink && item.link !== "#") {
+      return true;
+    }
+    
+    // Verificar se algum filho está ativo
+    if (item.children) {
+      return item.children.some(child => {
+        const normalizedChildLink = child.link === "/" ? "/" : child.link.replace(/\/$/, "");
+        return normalizedPathname === normalizedChildLink;
+      });
+    }
+    
+    return false;
+  }, [pathname]);
+  
+  // Expandir automaticamente itens com filhos ativos
+  useEffect(() => {
+    const data = getSidebarData();
+    const newExpanded = new Set<string>();
+    
+    data.forEach(item => {
+      if (item.children) {
+        const hasActiveChild = item.children.some(child => {
+          const normalizedPathname = pathname === "/" ? "/" : pathname.replace(/\/$/, "");
+          const normalizedChildLink = child.link === "/" ? "/" : child.link.replace(/\/$/, "");
+          return normalizedPathname === normalizedChildLink;
+        });
+        
+        if (hasActiveChild) {
+          newExpanded.add(item.title);
+        }
+      }
+    });
+    
+    setExpandedItems(newExpanded);
+  }, [pathname]);
+  
+  // Toggle expand/collapse
+  const toggleExpand = useCallback((title: string) => {
+    setExpandedItems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(title)) {
+        newSet.delete(title);
+      } else {
+        newSet.add(title);
+      }
+      return newSet;
+    });
+  }, []);
   
   // Filtrar itens do menu baseado no role do usuário
   const filteredMenuItems = useMemo(() => {
@@ -125,16 +191,39 @@ export function SidebarItems() {
       return true;
     });
     
+    // Filtrar também os filhos de itens com submenu
+    const filteredWithChildren = filtered.map(item => {
+      if (item.children) {
+        return {
+          ...item,
+          children: item.children.filter(child => {
+            // Aplicar mesma lógica de filtro aos filhos
+            if (child.link === "/admin/merchants" || child.link === "/admin/users") {
+              return userIsAdmin;
+            }
+            return true;
+          })
+        };
+      }
+      return item;
+    });
+    
     if (typeof window !== "undefined") {
       console.log(`  📊 Total de itens filtrados: ${filtered.length}/${data.length}`);
     }
     
-    return filtered;
+    return filteredWithChildren;
   }, [user]);
   
   // Função para logar cliques em links (não interfere com navegação client-side do Next.js)
-  const handleLinkClick = useCallback((link: string, title: string) => {
+  const handleLinkClick = useCallback((link: string, title: string, e?: React.MouseEvent) => {
     if (typeof window === "undefined") return;
+    
+    // Se for um link "#" (submenu parent), não navegar
+    if (link === "#") {
+      e?.preventDefault();
+      return;
+    }
     
     // Normalizar paths para comparação (tratar "/" e pathname corretamente)
     const normalizedPathname = pathname === "/" ? "/" : pathname.replace(/\/$/, "");
@@ -164,31 +253,60 @@ export function SidebarItems() {
     window.performance.mark(`nav-start-${link}`);
   }, [pathname]);
 
-  // Função para verificar se o link está ativo
-  const isActive = useCallback((link: string) => {
-    // Normalizar paths para comparação
-    const normalizedPathname = pathname === "/" ? "/" : pathname.replace(/\/$/, "");
-    const normalizedLink = link === "/" ? "/" : link.replace(/\/$/, "");
-    return normalizedPathname === normalizedLink;
-  }, [pathname]);
-
-  return (
-    <ul>
-      {filteredMenuItems.map((item) => (
-        <li key={item.title}>
+  const renderMenuItem = (item: SidebarItem, isChild: boolean = false) => {
+    const hasChildren = item.children && item.children.length > 0;
+    const isExpanded = expandedItems.has(item.title);
+    const itemIsActive = isActive(item);
+    const indentClass = isChild ? "ml-8" : "";
+    
+    return (
+      <li key={item.title} className={indentClass}>
+        {hasChildren ? (
+          <>
+            <div
+              className={`${style.link} ${itemIsActive ? style.active : ""}`}
+              onClick={() => toggleExpand(item.title)}
+            >
+              <span>
+                <IconRenderer iconName={item.icon} />
+              </span>
+              <span className={style.title}>{item.title}</span>
+              <span className="ml-auto">
+                <svg
+                  className={`w-4 h-4 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </span>
+            </div>
+            {isExpanded && hasChildren && (
+              <ul className="ml-4">
+                {item.children!.map((child) => renderMenuItem(child, true))}
+              </ul>
+            )}
+          </>
+        ) : (
           <Link 
             href={item.link}
-            className={`${style.link} 
-            ${isActive(item.link) && style.active}`}
-            onClick={() => handleLinkClick(item.link, item.title)}
+            className={`${style.link} ${itemIsActive ? style.active : ""}`}
+            onClick={(e) => handleLinkClick(item.link, item.title, e)}
           >
             <span>
               <IconRenderer iconName={item.icon} />
             </span>
             <span className={style.title}>{item.title}</span>
           </Link>
-        </li>
-      ))}
+        )}
+      </li>
+    );
+  };
+
+  return (
+    <ul>
+      {filteredMenuItems.map((item) => renderMenuItem(item))}
     </ul>
   );
 }

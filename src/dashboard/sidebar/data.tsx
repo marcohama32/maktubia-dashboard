@@ -6,11 +6,15 @@ import { UserIcon } from "./icons/UserIcon";
 import { CustomerIcon } from "./icons/CustomerIcon";
 import { PurchaseIcon } from "./icons/PurchaseIcon";
 import { TransferIcon } from "./icons/TransferIcon";
+import { PointsIcon } from "./icons/PointsIcon";
+import { PointsManagementIcon } from "./icons/PointsManagementIcon";
+import { RedemptionIcon } from "./icons/RedemptionIcon";
 
 export interface SidebarItem {
   title: string;
   icon: string; // Nome do componente do ícone
   link: string;
+  children?: SidebarItem[]; // Submenu items
 }
 
 export const sidebarItems: SidebarItem[] = [
@@ -25,9 +29,9 @@ export const sidebarItems: SidebarItem[] = [
     link: "/merchant/dashboard",
   },
   {
-    title: "Estabelecimentos",
-    icon: "EstablishmentIcon",
-    link: "/admin/establishments",
+    title: "Merchants",
+    icon: "UserIcon",
+    link: "/admin/merchants",
   },
   {
     title: "Usuários",
@@ -38,11 +42,6 @@ export const sidebarItems: SidebarItem[] = [
     title: "Clientes",
     icon: "CustomerIcon",
     link: "/admin/customers",
-  },
-  {
-    title: "Merchants",
-    icon: "UserIcon",
-    link: "/admin/merchants",
   },
   {
     title: "Campanhas",
@@ -60,24 +59,36 @@ export const sidebarItems: SidebarItem[] = [
     link: "/merchant/campaigns/my",
   },
   {
+    title: "Pontos",
+    icon: "PointsIcon",
+    link: "#",
+    children: [
+      {
+        title: "Gestão Pontos",
+        icon: "PointsManagementIcon",
+        link: "/admin/points",
+      },
+      {
+        title: "Resgates",
+        icon: "RedemptionIcon",
+        link: "/admin/redemptions",
+      },
+      {
+        title: "Transferências",
+        icon: "TransferIcon",
+        link: "/admin/transfers",
+      },
+    ],
+  },
+  {
+    title: "Estabelecimentos",
+    icon: "EstablishmentIcon",
+    link: "/admin/establishments",
+  },
+  {
     title: "Compras",
     icon: "PurchaseIcon",
     link: "/admin/purchases",
-  },
-  {
-    title: "Resgates",
-    icon: "PurchaseIcon",
-    link: "/admin/redemptions",
-  },
-  {
-    title: "Pontos",
-    icon: "PurchaseIcon",
-    link: "/admin/points",
-  },
-  {
-    title: "Transferências",
-    icon: "TransferIcon",
-    link: "/admin/transfers",
   },
   {
     title: "Guia de Uso",
@@ -98,6 +109,9 @@ if (UserIcon) iconMapInternal.UserIcon = UserIcon;
 if (CustomerIcon) iconMapInternal.CustomerIcon = CustomerIcon;
 if (PurchaseIcon) iconMapInternal.PurchaseIcon = PurchaseIcon;
 if (TransferIcon) iconMapInternal.TransferIcon = TransferIcon;
+if (PointsIcon) iconMapInternal.PointsIcon = PointsIcon;
+if (PointsManagementIcon) iconMapInternal.PointsManagementIcon = PointsManagementIcon;
+if (RedemptionIcon) iconMapInternal.RedemptionIcon = RedemptionIcon;
 
 export const iconMap = iconMapInternal;
 

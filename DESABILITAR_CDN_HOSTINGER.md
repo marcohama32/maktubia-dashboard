@@ -62,3 +62,7 @@ Para verificar se o CDN está ativo:
 2. Se mostrar IPs diferentes de `72.60.20.31`, o CDN ainda está ativo
 
 
+
+
+
+

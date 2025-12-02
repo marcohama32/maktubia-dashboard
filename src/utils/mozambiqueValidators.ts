@@ -67,17 +67,17 @@ export function formatMozambiquePhone(phone: string): string {
 
 /**
  * Valida número de BI (Bilhete de Identidade) moçambicano
- * Formato: 13 dígitos numéricos
+ * Formato: 12 dígitos + 1 letra = 13 caracteres
  */
 export function validateBI(bi: string): DocumentValidation {
   if (!bi || bi.trim() === "") {
     return { isValid: true }; // BI é opcional
   }
 
-  const cleaned = bi.replace(/\s+/g, "").replace(/[-\s]/g, "");
+  const cleaned = bi.replace(/\s+/g, "").replace(/[-\s]/g, "").toUpperCase();
 
-  // BI deve ter exatamente 13 dígitos numéricos
-  const biPattern = /^\d{13}$/;
+  // BI moçambicano: 12 dígitos seguidos de 1 letra = 13 caracteres (ex: 123456789456A)
+  const biPattern = /^\d{12}[A-Z]$/;
 
   if (biPattern.test(cleaned)) {
     return { isValid: true };
@@ -85,13 +85,13 @@ export function validateBI(bi: string): DocumentValidation {
 
   return {
     isValid: false,
-    error: "BI inválido. Deve conter exatamente 13 dígitos numéricos.",
+    error: "BI inválido. Deve conter exatamente 12 dígitos + 1 letra (13 caracteres).",
   };
 }
 
 /**
  * Valida número de Passaporte moçambicano
- * Formato: Geralmente letras e números, varia entre 6-9 caracteres
+ * Formato: 2 letras + 7 números
  */
 export function validatePassport(passport: string): DocumentValidation {
   if (!passport || passport.trim() === "") {
@@ -100,8 +100,8 @@ export function validatePassport(passport: string): DocumentValidation {
 
   const cleaned = passport.replace(/\s+/g, "").toUpperCase();
 
-  // Passaporte geralmente tem formato: letras e números, 6-9 caracteres
-  const passportPattern = /^[A-Z0-9]{6,9}$/;
+  // Passaporte: 2 letras seguidas de 7 números
+  const passportPattern = /^[A-Z]{2}\d{7}$/;
 
   if (passportPattern.test(cleaned)) {
     return { isValid: true };
@@ -109,23 +109,23 @@ export function validatePassport(passport: string): DocumentValidation {
 
   return {
     isValid: false,
-    error: "Passaporte inválido. Deve conter 6-9 caracteres alfanuméricos.",
+    error: "Passaporte inválido. Deve conter 2 letras seguidas de 7 números (ex: AB1234567).",
   };
 }
 
 /**
  * Valida número de Carta de Condução moçambicana
- * Formato: Geralmente números, pode ter letras, 8-10 caracteres
+ * Formato: 9 dígitos
  */
 export function validateDrivingLicense(license: string): DocumentValidation {
   if (!license || license.trim() === "") {
     return { isValid: true }; // Carta de Condução é opcional
   }
 
-  const cleaned = license.replace(/\s+/g, "").toUpperCase();
+  const cleaned = license.replace(/\s+/g, "").replace(/[-\s]/g, "");
 
-  // Carta de Condução geralmente tem formato alfanumérico, 8-10 caracteres
-  const licensePattern = /^[A-Z0-9]{8,10}$/;
+  // Carta de Condução deve ter exatamente 9 dígitos numéricos
+  const licensePattern = /^\d{9}$/;
 
   if (licensePattern.test(cleaned)) {
     return { isValid: true };
@@ -133,13 +133,13 @@ export function validateDrivingLicense(license: string): DocumentValidation {
 
   return {
     isValid: false,
-    error: "Carta de Condução inválida. Deve conter 8-10 caracteres alfanuméricos.",
+    error: "Carta de Condução inválida. Deve conter exatamente 9 dígitos numéricos.",
   };
 }
 
 /**
  * Valida número de NUIT (Número Único de Identificação Tributária)
- * Formato: 9 dígitos numéricos
+ * Formato: 9 dígitos
  */
 export function validateNUIT(nuit: string): DocumentValidation {
   if (!nuit || nuit.trim() === "") {
@@ -202,19 +202,25 @@ export function formatDocumentNumber(documentType: DocumentType, documentNumber:
 
   switch (documentType) {
     case "BI":
-      // BI: 13 dígitos, pode formatar como XXX XXX XXX XXX X
-      if (cleaned.length === 13 && /^\d+$/.test(cleaned)) {
-        return `${cleaned.slice(0, 3)} ${cleaned.slice(3, 6)} ${cleaned.slice(6, 9)} ${cleaned.slice(9, 12)} ${cleaned.slice(12)}`;
+      // BI: 12 dígitos + 1 letra = 13 caracteres (ex: 123456789456A)
+      const upper = cleaned.toUpperCase();
+      if (/^\d{12}[A-Z]$/.test(upper)) {
+        return `${upper.slice(0, 4)} ${upper.slice(4, 8)} ${upper.slice(8, 12)} ${upper.slice(12)}`;
       }
-      return cleaned;
+      return cleaned.toUpperCase();
     case "NUIT":
-      // NUIT: 9 dígitos, pode formatar como XXX XXX XXX
+    case "Carta de Condução":
+      // 9 dígitos, pode formatar como XXX XXX XXX
       if (cleaned.length === 9 && /^\d+$/.test(cleaned)) {
         return `${cleaned.slice(0, 3)} ${cleaned.slice(3, 6)} ${cleaned.slice(6)}`;
       }
       return cleaned;
     case "Passaporte":
-    case "Carta de Condução":
+      // Passaporte: 2 letras + 7 números, formatar como XX XXXXXXX
+      if (cleaned.length === 9 && /^[A-Z]{2}\d{7}$/.test(cleaned.toUpperCase())) {
+        const upper = cleaned.toUpperCase();
+        return `${upper.slice(0, 2)} ${upper.slice(2)}`;
+      }
       return cleaned.toUpperCase();
     default:
       return cleaned;
@@ -231,6 +237,10 @@ export const MOZAMBIQUE_DOCUMENT_TYPES: { value: DocumentType; label: string }[]
   { value: "NUIT", label: "NUIT (Número Único de Identificação Tributária)" },
   { value: "Outro", label: "Outro" },
 ];
+
+
+
+
 
 
 

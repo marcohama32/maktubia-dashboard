@@ -50,8 +50,9 @@ export default function NewCustomerPage() {
       return;
     }
 
-    if (!formData.password || formData.password.trim().length < 6) {
-      setError("A senha deve ter pelo menos 6 caracteres");
+    // Validar que a senha tenha exatamente 4 caracteres
+    if (!formData.password || formData.password.trim().length !== 4) {
+      setError("A senha deve conter exatamente 4 caracteres");
       return;
     }
 
@@ -77,9 +78,15 @@ export default function NewCustomerPage() {
       setLoading(true);
       
       // Preparar dados para envio - enviar tipo_documento e numero_documento ao backend
+      // NOTA: user_code é gerado automaticamente pelo backend, não deve ser enviado na criação
       const customerData: CreateCustomerDTO & { tipo_documento?: string; numero_documento?: string } = {
-        ...formData,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        username: formData.username,
+        email: formData.email,
         phone: formData.phone ? formatMozambiquePhone(formData.phone) : undefined,
+        password: formData.password,
+        isActive: formData.isActive !== undefined ? formData.isActive : true,
         // Enviar tipo_documento e numero_documento (novos campos do backend)
         tipo_documento: formData.documentType && formData.documentNumber ? formData.documentType : undefined,
         numero_documento: formData.documentNumber 
@@ -151,10 +158,10 @@ export default function NewCustomerPage() {
       if (!validation.isValid) {
         setDocumentError(validation.error || "Documento inválido");
       } else {
-        // Formatar documento quando válido
+        // Limpar espaços do documento (não formatar visualmente)
         setFormData(prev => ({
           ...prev,
-          documentNumber: formatDocumentNumber(prev.documentType, prev.documentNumber),
+          documentNumber: prev.documentNumber.replace(/\s+/g, "").toUpperCase(),
         }));
       }
     }
@@ -302,13 +309,13 @@ export default function NewCustomerPage() {
               onBlur={handleDocumentBlur}
               placeholder={
                 formData.documentType === "BI"
-                  ? "13 dígitos (ex: 1234567890123)"
+                  ? "12 dígitos + 1 letra (ex: 123456789456A)"
                   : formData.documentType === "NUIT"
                   ? "9 dígitos (ex: 123456789)"
                   : formData.documentType === "Passaporte"
-                  ? "6-9 caracteres alfanuméricos"
+                  ? "2 letras + 7 números (ex: AB1234567)"
                   : formData.documentType === "Carta de Condução"
-                  ? "8-10 caracteres alfanuméricos"
+                  ? "9 dígitos (ex: 123456789)"
                   : "Número do documento"
               }
               className={`mt-1 block w-full rounded-md border ${
@@ -321,13 +328,13 @@ export default function NewCustomerPage() {
             {!documentError && formData.documentType && (
               <p className="mt-1 text-xs text-gray-500">
                 {formData.documentType === "BI"
-                  ? "BI: 13 dígitos numéricos"
+                  ? "BI: 12 dígitos + 1 letra (13 caracteres)"
                   : formData.documentType === "NUIT"
                   ? "NUIT: 9 dígitos numéricos"
                   : formData.documentType === "Passaporte"
-                  ? "Passaporte: 6-9 caracteres alfanuméricos"
+                  ? "Passaporte: 2 letras + 7 números"
                   : formData.documentType === "Carta de Condução"
-                  ? "Carta de Condução: 8-10 caracteres alfanuméricos"
+                  ? "Carta de Condução: 9 dígitos numéricos"
                   : "Digite o número do documento"}
               </p>
             )}
@@ -342,12 +349,20 @@ export default function NewCustomerPage() {
               id="password"
               name="password"
               required
+              minLength={4}
+              maxLength={4}
               value={formData.password || ""}
-              onChange={handleChange}
-              minLength={6}
+              onChange={(e) => {
+                // Limitar a 4 caracteres
+                const value = e.target.value;
+                if (value.length <= 4) {
+                  setFormData(prev => ({ ...prev, password: value }));
+                }
+              }}
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+              placeholder="Digite 4 caracteres"
             />
-            <p className="mt-1 text-xs text-gray-500">Mínimo de 6 caracteres</p>
+            <p className="mt-1 text-xs text-gray-500">A senha deve conter exatamente 4 caracteres (números, letras ou símbolos)</p>
           </div>
 
           <div>

@@ -141,6 +141,39 @@ export function RouteGuard({ children }: RouteGuardProps) {
     const userIsAdmin = isAdmin(user);
     const userIsMerchant = isMerchant(user);
 
+    // Verificação global: apenas admin e merchant podem acessar o sistema
+    if (!userIsAdmin && !userIsMerchant) {
+      // Debug
+      if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+        console.log("❌ [RouteGuard] Acesso negado - role não permitida:", {
+          pathname,
+          userRole,
+          user: user?.email || user?.username || "N/A",
+        });
+      }
+      // Redirecionar para login se não for admin nem merchant
+      if (!isRedirecting && !redirectingRef.current) {
+        redirectingRef.current = true;
+        setIsRedirecting(true);
+        // Limpar token e deslogar
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("auth_token");
+        }
+        router.replace("/login").catch(() => {
+          window.location.href = "/login";
+        }).finally(() => {
+          // Resetar isRedirecting após um tempo
+          timeoutRef.current = setTimeout(() => {
+            setIsRedirecting(false);
+            redirectingRef.current = false;
+          }, 2000);
+        });
+      }
+      setHasAccess(false);
+      setIsChecking(false);
+      return;
+    }
+
     // Debug: logar informações de verificação
     if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
       console.log("🔍 [RouteGuard] Verificando acesso:", {

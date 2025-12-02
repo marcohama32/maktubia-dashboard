@@ -25,6 +25,7 @@ export default function EditCustomerPage() {
     email: "",
     phone: "",
     bi: "",
+    user_code: "",
     documentType: "BI",
     documentNumber: "",
     isActive: true,
@@ -52,17 +53,18 @@ export default function EditCustomerPage() {
         documentType = (data as any).tipo_documento as DocumentType;
       } else if (documentNumber) {
         // Se não houver tipo_documento, inferir do formato do número
-        // Se BI tem 13 dígitos, é BI
-        if (/^\d{13}$/.test(documentNumber.replace(/\s+/g, ""))) {
+        const cleaned = documentNumber.replace(/\s+/g, "");
+        // Se BI tem 12 dígitos + 1 letra (13 caracteres), é BI
+        if (/^\d{12}[A-Z]$/i.test(cleaned)) {
           documentType = "BI";
-        } else if (/^\d{9}$/.test(documentNumber.replace(/\s+/g, ""))) {
+        } else if (/^\d{9}$/.test(cleaned)) {
           // Se tem 9 dígitos, pode ser NUIT
           documentType = "NUIT";
-        } else if (/^[A-Z0-9]{6,9}$/i.test(documentNumber.replace(/\s+/g, ""))) {
-          // Se tem 6-9 caracteres alfanuméricos, pode ser Passaporte
+        } else if (/^[A-Z]{2}\d{7}$/i.test(cleaned)) {
+          // Se tem 2 letras + 7 números, é Passaporte
           documentType = "Passaporte";
-        } else if (/^[A-Z0-9]{8,10}$/i.test(documentNumber.replace(/\s+/g, ""))) {
-          // Se tem 8-10 caracteres alfanuméricos, pode ser Carta de Condução
+        } else if (/^\d{9}$/.test(cleaned)) {
+          // Se tem 9 dígitos, pode ser Carta de Condução
           documentType = "Carta de Condução";
         } else {
           documentType = "Outro";
@@ -76,6 +78,7 @@ export default function EditCustomerPage() {
         email: data.email || "",
         phone: data.phone || "",
         bi: data.bi || "",
+        user_code: (data as any).user_code || "",
         documentType: documentType,
         documentNumber: documentNumber,
         isActive: data.isActive !== false,
@@ -144,8 +147,9 @@ export default function EditCustomerPage() {
       
       // Só adiciona senha se foi preenchida
       if (password && password.trim().length > 0) {
-        if (password.length < 6) {
-          setError("A senha deve ter pelo menos 6 caracteres");
+        // Validar que a senha tenha exatamente 4 caracteres
+        if (password.trim().length !== 4) {
+          setError("A senha deve conter exatamente 4 caracteres");
           return;
         }
         dataToSend.password = password;
@@ -209,10 +213,10 @@ export default function EditCustomerPage() {
       if (!validation.isValid) {
         setDocumentError(validation.error || "Documento inválido");
       } else {
-        // Formatar documento quando válido
+        // Limpar espaços do documento (não formatar visualmente)
         setFormData(prev => ({
           ...prev,
-          documentNumber: formatDocumentNumber(prev.documentType, prev.documentNumber),
+          documentNumber: prev.documentNumber.replace(/\s+/g, "").toUpperCase(),
         }));
       }
     }
@@ -306,6 +310,22 @@ export default function EditCustomerPage() {
             </div>
           </div>
 
+          <div>
+            <label htmlFor="user_code" className="block text-sm font-medium text-gray-700">
+              Código de Usuário
+            </label>
+            <input
+              type="text"
+              id="user_code"
+              name="user_code"
+              value={formData.user_code || ""}
+              onChange={handleChange}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+              placeholder="Código único do usuário"
+            />
+            <p className="mt-1 text-xs text-gray-500">Código único identificador do usuário (opcional)</p>
+          </div>
+
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <div>
               <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
@@ -366,13 +386,13 @@ export default function EditCustomerPage() {
               onBlur={handleDocumentBlur}
               placeholder={
                 formData.documentType === "BI"
-                  ? "13 dígitos (ex: 1234567890123)"
+                  ? "12 dígitos + 1 letra (ex: 123456789456A)"
                   : formData.documentType === "NUIT"
                   ? "9 dígitos (ex: 123456789)"
                   : formData.documentType === "Passaporte"
-                  ? "6-9 caracteres alfanuméricos"
+                  ? "2 letras + 7 números (ex: AB1234567)"
                   : formData.documentType === "Carta de Condução"
-                  ? "8-10 caracteres alfanuméricos"
+                  ? "9 dígitos (ex: 123456789)"
                   : "Número do documento"
               }
               className={`mt-1 block w-full rounded-md border ${
@@ -385,13 +405,13 @@ export default function EditCustomerPage() {
             {!documentError && formData.documentType && (
               <p className="mt-1 text-xs text-gray-500">
                 {formData.documentType === "BI"
-                  ? "BI: 13 dígitos numéricos"
+                  ? "BI: 12 dígitos + 1 letra (13 caracteres)"
                   : formData.documentType === "NUIT"
                   ? "NUIT: 9 dígitos numéricos"
                   : formData.documentType === "Passaporte"
-                  ? "Passaporte: 6-9 caracteres alfanuméricos"
+                  ? "Passaporte: 2 letras + 7 números"
                   : formData.documentType === "Carta de Condução"
-                  ? "Carta de Condução: 8-10 caracteres alfanuméricos"
+                  ? "Carta de Condução: 9 dígitos numéricos"
                   : "Digite o número do documento"}
               </p>
             )}
@@ -405,12 +425,20 @@ export default function EditCustomerPage() {
               type="password"
               id="password"
               name="password"
+              minLength={4}
+              maxLength={4}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              minLength={6}
+              onChange={(e) => {
+                // Limitar a 4 caracteres
+                const value = e.target.value;
+                if (value.length <= 4) {
+                  setPassword(value);
+                }
+              }}
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+              placeholder="Digite 4 caracteres"
             />
-            <p className="mt-1 text-xs text-gray-500">Deixe em branco para manter a senha atual. Mínimo de 6 caracteres se alterar.</p>
+            <p className="mt-1 text-xs text-gray-500">Deixe em branco para manter a senha atual. A senha deve conter exatamente 4 caracteres (números, letras ou símbolos) se alterar.</p>
           </div>
 
           <div>

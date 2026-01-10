@@ -95,6 +95,11 @@ export const sidebarItems: SidebarItem[] = [
     icon: "DocIcon",
     link: "/admin/documentation",
   },
+  {
+    title: "Sair",
+    icon: "UserIcon",
+    link: "/logout",
+  },
 ];
 
 // Mapa de ícones - garantir que todos estão definidos

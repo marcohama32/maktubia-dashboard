@@ -172,141 +172,109 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-100 to-gray-100">
-      <div className="w-full max-w-md space-y-6 rounded-xl bg-white p-8 shadow-2xl">
-        <div className="text-center">
+    <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-md">
+        <div className="mb-6 text-center">
           <div className="mb-4 flex justify-center">
             <Image
               src="/images/logo2.png"
               alt="Maktubia Logo"
-              width={120}
-              height={120}
+              width={80}
+              height={80}
               className="object-contain"
               priority
-              sizes="120px"
+              sizes="80px"
             />
           </div>
-          <h2 className="text-3xl font-extrabold text-gray-900">
-            Bem-vindo de volta
+          <h2 className="text-2xl font-semibold text-gray-900">
+            Entrar
           </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Entre com suas credenciais para acessar o painel
-          </p>
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="identifier" className="mb-1 block text-sm font-medium text-gray-700">
-                Usuário
-              </label>
-              <div className="relative">
-                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                  <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M10 10a4 4 0 100-8 4 4 0 000 8z" />
-                    <path fillRule="evenodd" d="M2 18a8 8 0 0116 0H2z" clipRule="evenodd" />
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="identifier" className="mb-1 block text-sm text-gray-700">
+              Usuário
+            </label>
+            <input
+              id="identifier"
+              name="identifier"
+              type="text"
+              required
+              disabled={loading || !!cooldownEnd}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100"
+              placeholder="Usuário ou telefone"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+            />
+          </div>
+          
+          <div>
+            <label htmlFor="password" className="mb-1 block text-sm text-gray-700">
+              Senha
+            </label>
+            <div className="relative">
+              <input
+                id="password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                inputMode="numeric"
+                pattern="[0-9]{4}"
+                required
+                minLength={4}
+                maxLength={4}
+                disabled={loading || !!cooldownEnd}
+                ref={passwordRef}
+                className="w-full rounded border border-gray-300 px-3 py-2 pr-10 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100"
+                placeholder="4 dígitos"
+                value={password}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '');
+                  if (value.length <= 4) {
+                    setPassword(value);
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                disabled={loading || !!cooldownEnd}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                title={showPassword ? "Ocultar" : "Mostrar"}
+              >
+                {showPassword ? (
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
                   </svg>
-                </div>
-                <input
-                  id="identifier"
-                  name="identifier"
-                  type="text"
-                  required
-                  disabled={loading || !!cooldownEnd}
-                  className="block w-full appearance-none rounded-lg border border-gray-300 py-2.5 pl-10 pr-3 text-sm placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-blue-500 disabled:opacity-60"
-                  placeholder="seu usuário / telefone"
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                />
-              </div>
-            </div>
-            <div>
-              <label htmlFor="password" className="mb-1 block text-sm font-medium text-gray-700">
-                Senha
-              </label>
-              <div className="relative">
-                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                  <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                ) : (
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                   </svg>
-                </div>
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  inputMode="numeric"
-                  pattern="[0-9]{4}"
-                  required
-                  minLength={4}
-                  maxLength={4}
-                  disabled={loading || !!cooldownEnd}
-                  ref={passwordRef}
-                  className="block w-full appearance-none rounded-lg border border-gray-300 py-2.5 pl-10 pr-10 text-sm placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-blue-500 disabled:opacity-60"
-                  placeholder="Digite 4 dígitos"
-                  value={password}
-                  onChange={(e) => {
-                    // Permitir apenas números
-                    const value = e.target.value.replace(/\D/g, '');
-                    // Limitar a 4 dígitos
-                    if (value.length <= 4) {
-                      setPassword(value);
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  disabled={loading || !!cooldownEnd}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                >
-                  {showPassword ? (
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                    </svg>
-                  ) : (
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                  )}
-                </button>
-              </div>
+                )}
+              </button>
             </div>
           </div>
 
           {error && (
-            <div className="rounded-lg bg-red-50 p-3 text-center text-sm text-red-500">
+            <div className="rounded bg-red-50 p-2 text-sm text-red-600">
               {error}
             </div>
           )}
 
           {timeLeft && (
-            <div className="rounded-lg bg-yellow-50 p-3 text-center text-sm text-yellow-700">
-              Bloqueado por muitas tentativas. Tente novamente daqui a {timeLeft}.
+            <div className="rounded bg-yellow-50 p-2 text-sm text-yellow-700">
+              Aguarde {timeLeft} antes de tentar novamente
             </div>
           )}
 
-          <div className="pt-2">
-            <button
-              type="submit"
-              disabled={loading || !!cooldownEnd}
-              className="group relative flex w-full justify-center rounded-lg border border-transparent bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-md transition-all duration-200 ease-in-out hover:bg-blue-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-60"
-            >
-              <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                {loading ? (
-                  <svg className="h-5 w-5 animate-spin text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-                  </svg>
-                ) : (
-                  <svg className="h-5 w-5 text-blue-500 group-hover:text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                  </svg>
-                )}
-              </span>
-              {loading ? "A entrar..." : "Entrar no Sistema"}
-            </button>
-          </div>
+          <button
+            type="submit"
+            disabled={loading || !!cooldownEnd}
+            className="w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? "A entrar..." : "Entrar"}
+          </button>
         </form>
       </div>
     </div>

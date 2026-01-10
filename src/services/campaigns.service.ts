@@ -234,17 +234,17 @@ export interface CampaignsResponse {
 
 export interface CreateCampaignDTO {
   establishment_id: number;
-  // Campos novos (obrigatórios)
+  // Campos base obrigatórios (CR#3)
   campaign_name: string;
-  sponsor_name: string;
   valid_from: string;
   valid_until: string;
-  // Campos opcionais novos
+  reward_value_mt: number;
+  reward_points_cost: number;
+  // Campos opcionais
+  sponsor_name?: string;
   total_points_limit?: number;
   redemption_deadline?: string;
   reward_description?: string;
-  reward_value_mt?: number;
-  reward_points_cost?: number;
   reward_stock?: number;
   status?: "Rascunho" | "Activo" | "Parado" | "Cancelado" | "Concluído" | "Expirado";
   accumulation_rate?: number; // Taxa de acumulação (ex: 0.1 = 1 MT = 10 pts)
@@ -281,6 +281,11 @@ export interface CreateCampaignDTO {
   start_date?: string; // Mapeado para valid_from
   end_date?: string; // Mapeado para valid_until
   is_active?: boolean;
+  // Novos campos por tipo (CR#3)
+  draw_periodicity?: "daily" | "weekly" | "monthly" | "event";
+  draw_points_per_participation?: number;
+  draw_prizes_list?: any;
+  exchange_prizes_list?: any;
 }
 
 export interface UpdateCampaignDTO {

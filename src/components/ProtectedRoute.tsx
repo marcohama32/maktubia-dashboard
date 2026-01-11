@@ -77,28 +77,8 @@ export function ProtectedRoute({
     const userIsAdmin = isAdmin(user);
     const userIsMerchant = isMerchant(user);
 
-    // Verificação global: apenas admin e merchant podem acessar o sistema
-    if (!userIsAdmin && !userIsMerchant) {
-      // Redirecionar para login se não for admin nem merchant
-      if (!redirectingRef.current) {
-        redirectingRef.current = true;
-        // Limpar token e deslogar
-        if (typeof window !== "undefined") {
-          localStorage.removeItem("auth_token");
-        }
-        router.replace("/login").catch(() => {
-          window.location.href = "/login";
-        }).finally(() => {
-          // Resetar redirectingRef após um tempo
-          timeoutRef.current = setTimeout(() => {
-            redirectingRef.current = false;
-          }, 2000);
-        });
-      }
-      setHasAccess(false);
-      setIsChecking(false);
-      return;
-    }
+    // Permitir acesso para todas as roles (admin, merchant, cliente, etc.)
+    // A verificação de acesso específico por rota será feita abaixo
 
     let accessGranted = false;
 

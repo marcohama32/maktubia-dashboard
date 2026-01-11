@@ -102,13 +102,17 @@ export default function EditUserPage() {
       setError("");
       const data = await userService.getById(userId);
       
+      console.log("🔍 [EDIT USER] Dados recebidos do backend:", data);
+      console.log("🔍 [EDIT USER] Tipo de dados:", typeof data);
+      console.log("🔍 [EDIT USER] Chaves disponíveis:", Object.keys(data || {}));
+      
       // Dividir o nome completo em firstName e lastName se necessário
-      let firstName = data.firstName || "";
-      let lastName = data.lastName || "";
+      let firstName = data.firstName || (data as any).first_name || "";
+      let lastName = data.lastName || (data as any).last_name || "";
       
       // Se não houver firstName/lastName mas houver name ou fullName, dividir
-      if (!firstName && !lastName && (data.name || data.fullName)) {
-        const fullName = data.fullName || data.name || "";
+      if (!firstName && !lastName && (data.name || data.fullName || (data as any).full_name)) {
+        const fullName = data.fullName || data.name || (data as any).full_name || "";
         const nameParts = fullName.trim().split(/\s+/);
         if (nameParts.length > 0) {
           firstName = nameParts[0];
@@ -118,11 +122,23 @@ export default function EditUserPage() {
       
       // Detectar tipo de documento - priorizar tipo_documento do backend, senão inferir do formato
       let documentType: DocumentType = "BI";
-      let documentNumber = ((data as any).numero_documento || data.bi || "").replace(/\s+/g, "");
+      // Tentar múltiplos formatos para número de documento (priorizar bi que é o formato do backend)
+      let documentNumber = "";
+      if (data.bi) {
+        documentNumber = String(data.bi).replace(/\s+/g, "");
+      } else if ((data as any).numero_documento) {
+        documentNumber = String((data as any).numero_documento).replace(/\s+/g, "");
+      } else if ((data as any).document_number) {
+        documentNumber = String((data as any).document_number).replace(/\s+/g, "");
+      } else if ((data as any).bi_number) {
+        documentNumber = String((data as any).bi_number).replace(/\s+/g, "");
+      }
       
       // Se o backend retornou tipo_documento, usar ele
       if ((data as any).tipo_documento) {
-        documentType = (data as any).tipo_documento as DocumentType;
+        documentType = String((data as any).tipo_documento) as DocumentType;
+      } else if ((data as any).document_type) {
+        documentType = String((data as any).document_type) as DocumentType;
       } else if (documentNumber) {
         // Se não houver tipo_documento, inferir do formato do número
         const cleaned = documentNumber;
@@ -143,22 +159,70 @@ export default function EditUserPage() {
         }
       }
       
+      // Extrair user_code - tentar múltiplos formatos (priorizar userCode que é o formato do backend)
+      let userCode = "";
+      if ((data as any).userCode) {
+        userCode = String((data as any).userCode);
+      } else if ((data as any).user_code) {
+        userCode = String((data as any).user_code);
+      } else if ((data as any).code) {
+        userCode = String((data as any).code);
+      } else if ((data as any).customer_code) {
+        userCode = String((data as any).customer_code);
+      } else if ((data as any).client_code) {
+        userCode = String((data as any).client_code);
+      }
+      
+      // Extrair role - tentar múltiplos formatos
+      let roleValue = "";
+      if (typeof data.role === "string") {
+        roleValue = data.role;
+      } else if (data.role?.name) {
+        roleValue = data.role.name;
+      } else if ((data as any).role_name) {
+        roleValue = (data as any).role_name;
+      } else if ((data as any).role_id) {
+        // Se tiver role_id, pode precisar buscar o nome do role
+        roleValue = (data as any).role_id.toString();
+      }
+      
       setFormData({
-        firstName: firstName,
-        lastName: lastName,
-        username: data.username || "",
+        firstName: firstName || "",
+        lastName: lastName || "",
+        username: data.username || (data as any).user_name || "",
         email: data.email || "",
-        phone: data.phone || "",
-        bi: data.bi || "",
-        user_code: (data as any).user_code || "",
+        phone: data.phone || (data as any).phone_number || "",
+        bi: data.bi || (data as any).bi_number || documentNumber || "",
+        user_code: userCode,
         documentType: documentType,
-        documentNumber: documentNumber ? documentNumber.replace(/\s+/g, "") : "",
-        role: typeof data.role === "string" ? data.role : (data.role?.name || ""),
-        isActive: data.isActive !== false,
+        documentNumber: documentNumber,
+        role: roleValue,
+        isActive: data.isActive !== undefined ? data.isActive : (data as any).is_active !== undefined ? (data as any).is_active : true,
       });
       setPassword(""); // Não carregar senha (por segurança)
 
-      console.log("✅ Dados do usuário carregados:", data);
+      console.log("✅ [EDIT USER] Dados do usuário carregados e preenchidos:", {
+        formData: {
+          firstName,
+          lastName,
+          username: data.username || (data as any).user_name || "",
+          email: data.email || "",
+          phone: data.phone || (data as any).phone_number || "",
+          bi: data.bi || (data as any).bi_number || documentNumber || "",
+          user_code: userCode,
+          documentType,
+          documentNumber,
+          role: roleValue,
+          isActive: data.isActive !== undefined ? data.isActive : (data as any).is_active !== undefined ? (data as any).is_active : true,
+        },
+        rawData: data,
+        extractedFields: {
+          userCode,
+          documentNumber,
+          documentType,
+          roleValue
+        }
+      });
     } catch (err: any) {
       console.error("❌ Erro ao carregar usuário:", err);
       setError(err.message || "Erro ao carregar usuário");
@@ -421,11 +485,12 @@ export default function EditUserPage() {
               id="user_code"
               name="user_code"
               value={formData.user_code || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-              placeholder="Código único do usuário"
+              readOnly
+              disabled
+              className="mt-1 block w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-gray-500 cursor-not-allowed"
+              placeholder="Código gerado automaticamente"
             />
-            <p className="mt-1 text-xs text-gray-500">Código único identificador do usuário (opcional)</p>
+            <p className="mt-1 text-xs text-gray-500">Código único gerado automaticamente pelo sistema</p>
           </div>
 
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">

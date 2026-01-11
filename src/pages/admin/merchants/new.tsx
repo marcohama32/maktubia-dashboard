@@ -24,6 +24,12 @@ export default function NewMerchantPage() {
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const userDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Estados para pesquisa de estabelecimento
+  const [establishmentSearchTerm, setEstablishmentSearchTerm] = useState<string>("");
+  const [isEstablishmentDropdownOpen, setIsEstablishmentDropdownOpen] = useState(false);
+  const establishmentDropdownRef = useRef<HTMLDivElement>(null);
+  const [selectedEstablishmentId, setSelectedEstablishmentId] = useState<string | number>(0);
+
   const [formData, setFormData] = useState<CreateMerchantDTO>({
     user_id: 0,
     establishment_id: 0,
@@ -54,9 +60,11 @@ export default function NewMerchantPage() {
   useEffect(() => {
     const { establishment_id } = router.query;
     if (establishment_id && !isNaN(Number(establishment_id))) {
+      const estId = Number(establishment_id);
+      setSelectedEstablishmentId(estId);
       setFormData(prev => ({
         ...prev,
-        establishment_id: Number(establishment_id),
+        establishment_id: estId,
       }));
     }
   }, [router.query]);
@@ -111,7 +119,14 @@ export default function NewMerchantPage() {
     e.preventDefault();
     
     // Validação: establishment_id obrigatório
+    console.log("🔍 [MERCHANTS] Validando formulário antes de submeter:", {
+      formDataEstablishmentId: formData.establishment_id,
+      selectedEstablishmentId,
+      establishmentsCount: establishments.length
+    });
+    
     if (!formData.establishment_id || formData.establishment_id === 0) {
+      console.error("❌ [MERCHANTS] Erro: Estabelecimento não selecionado");
       setAlertConfig({
         title: "Erro!",
         message: "Por favor, selecione um estabelecimento.",
@@ -120,6 +135,11 @@ export default function NewMerchantPage() {
       setAlertModalOpen(true);
       return;
     }
+    
+    console.log("✅ [MERCHANTS] Validação passou, estabelecimento selecionado:", {
+      establishmentId: formData.establishment_id,
+      establishmentName: establishments.find(e => (e.id || e.establishment_id) === formData.establishment_id)?.name
+    });
 
     // Modo múltiplo: validar se há merchants selecionados
     if (isMultipleMode) {
@@ -364,11 +384,86 @@ export default function NewMerchantPage() {
     return selectedUser.fullName || `${selectedUser.firstName || ""} ${selectedUser.lastName || ""}`.trim() || selectedUser.username || "";
   };
 
-  // Fechar dropdown ao clicar fora
+  // Filtrar estabelecimentos baseado no termo de pesquisa
+  const filteredEstablishments = establishments.filter((est) => {
+    if (!establishmentSearchTerm || establishmentSearchTerm.trim() === "") {
+      return true;
+    }
+    const searchLower = establishmentSearchTerm.toLowerCase().trim();
+    const name = (est.name || "").toLowerCase();
+    const type = (est.type || "").toLowerCase();
+    return name.includes(searchLower) || type.includes(searchLower);
+  });
+
+  // Selecionar estabelecimento
+  const handleEstablishmentSelect = (establishmentId: string | number) => {
+    const selectedEstablishment = establishments.find(e => (e.id || e.establishment_id) === establishmentId);
+    console.log("🔍 [MERCHANTS] Selecionando estabelecimento:", {
+      establishmentId,
+      establishmentIdType: typeof establishmentId,
+      establishment: selectedEstablishment,
+      name: selectedEstablishment?.name,
+      type: selectedEstablishment?.type,
+      allEstablishments: establishments.length
+    });
+    
+    // Atualizar estado imediatamente
+    setSelectedEstablishmentId(establishmentId);
+    
+    // Converter para número se possível, senão manter como string
+    const establishmentIdForForm = typeof establishmentId === 'string' && !isNaN(Number(establishmentId)) 
+      ? Number(establishmentId) 
+      : establishmentId;
+    
+    setFormData(prev => {
+      const newFormData = { ...prev, establishment_id: establishmentIdForForm as any };
+      console.log("✅ [MERCHANTS] Estabelecimento selecionado:", {
+        establishmentId,
+        establishmentIdForForm,
+        establishmentName: selectedEstablishment?.name,
+        formDataBefore: prev.establishment_id,
+        formDataAfter: newFormData.establishment_id,
+        fullFormData: newFormData
+      });
+      return newFormData;
+    });
+    setEstablishmentSearchTerm("");
+    setIsEstablishmentDropdownOpen(false);
+  };
+  
+  // Monitorar mudanças no selectedEstablishmentId
+  useEffect(() => {
+    if (selectedEstablishmentId && selectedEstablishmentId !== 0 && selectedEstablishmentId !== "") {
+      console.log("🔄 [MERCHANTS] selectedEstablishmentId mudou:", {
+        selectedEstablishmentId,
+        formDataEstablishmentId: formData.establishment_id,
+        establishmentsCount: establishments.length
+      });
+    }
+  }, [selectedEstablishmentId, formData.establishment_id]);
+
+  // Obter nome do estabelecimento selecionado
+  const getSelectedEstablishmentName = () => {
+    if (!selectedEstablishmentId || selectedEstablishmentId === 0 || selectedEstablishmentId === "") return "";
+    const selectedEstablishment = establishments.find(e => {
+      const estId = e.id || e.establishment_id;
+      return estId === selectedEstablishmentId || String(estId) === String(selectedEstablishmentId);
+    });
+    if (!selectedEstablishment) {
+      console.warn("⚠️ [MERCHANTS] Estabelecimento não encontrado para ID:", selectedEstablishmentId);
+      return "";
+    }
+    return selectedEstablishment.name || "";
+  };
+
+  // Fechar dropdowns ao clicar fora
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (userDropdownRef.current && !userDropdownRef.current.contains(event.target as Node)) {
         setIsUserDropdownOpen(false);
+      }
+      if (establishmentDropdownRef.current && !establishmentDropdownRef.current.contains(event.target as Node)) {
+        setIsEstablishmentDropdownOpen(false);
       }
     };
 
@@ -672,61 +767,132 @@ export default function NewMerchantPage() {
               </div>
             )}
 
-            <div>
-              <label htmlFor="establishment_id" className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Estabelecimento <span className="text-red-500">*</span>
               </label>
-              <select
-                id="establishment_id"
-                name="establishment_id"
-                value={formData.establishment_id && formData.establishment_id > 0 ? String(formData.establishment_id) : ""}
-                onChange={handleChange}
-                required
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
-              >
-                <option value="">Selecione um estabelecimento</option>
-                {establishments.map((est) => (
-                  <option key={est.id} value={String(est.id)}>
-                    {est.name} {est.type ? `(${est.type})` : ""}
-                  </option>
-                ))}
-              </select>
+              <div className="relative" ref={establishmentDropdownRef}>
+                <div className="relative">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    value={
+                      selectedEstablishmentId && selectedEstablishmentId !== 0 && selectedEstablishmentId !== "" && !isEstablishmentDropdownOpen
+                        ? getSelectedEstablishmentName()
+                        : establishmentSearchTerm
+                    }
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setEstablishmentSearchTerm(value);
+                      setIsEstablishmentDropdownOpen(true);
+                      if (selectedEstablishmentId && selectedEstablishmentId !== 0 && selectedEstablishmentId !== "") {
+                        setSelectedEstablishmentId(0);
+                        setFormData(prev => ({ ...prev, establishment_id: 0 }));
+                      }
+                    }}
+                    onFocus={() => {
+                      setIsEstablishmentDropdownOpen(true);
+                    }}
+                    placeholder={
+                      selectedEstablishmentId && selectedEstablishmentId !== 0 && selectedEstablishmentId !== ""
+                        ? getSelectedEstablishmentName()
+                        : "Pesquisar estabelecimentos por nome ou tipo..."
+                    }
+                    className="block w-full rounded-lg border border-gray-300 py-2 pl-10 pr-3 focus:border-blue-500 focus:ring-blue-500"
+                    required={!selectedEstablishmentId || selectedEstablishmentId === 0 || selectedEstablishmentId === ""}
+                  />
+                  {selectedEstablishmentId && selectedEstablishmentId !== 0 && selectedEstablishmentId !== "" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        console.log("🗑️ [MERCHANTS] Limpando seleção de estabelecimento");
+                        setSelectedEstablishmentId(0);
+                        setFormData(prev => ({ ...prev, establishment_id: 0 }));
+                        setEstablishmentSearchTerm("");
+                        setIsEstablishmentDropdownOpen(true);
+                      }}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                    >
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+                
+                {/* Dropdown de resultados */}
+                {isEstablishmentDropdownOpen && (
+                  <div className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-300 bg-white shadow-lg">
+                    {filteredEstablishments.length === 0 ? (
+                      <div className="px-4 py-3 text-sm text-gray-500">
+                        {establishmentSearchTerm && establishmentSearchTerm.trim() !== "" ? "Nenhum estabelecimento encontrado" : establishments.length === 0 ? "Nenhum estabelecimento disponível" : "Digite para pesquisar estabelecimentos"}
+                      </div>
+                    ) : (
+                      <>
+                        {!establishmentSearchTerm || establishmentSearchTerm.trim() === "" ? (
+                          <div className="px-4 py-2 text-xs font-semibold text-gray-500 bg-gray-50 border-b border-gray-200">
+                            {filteredEstablishments.length} estabelecimento{filteredEstablishments.length !== 1 ? "s" : ""} disponível{filteredEstablishments.length !== 1 ? "is" : ""}
+                          </div>
+                        ) : null}
+                        {filteredEstablishments.map((est) => {
+                          const establishmentId = est.id || est.establishment_id;
+                          if (!establishmentId) {
+                            console.warn("⚠️ [MERCHANTS] Estabelecimento sem ID:", est);
+                            return null;
+                          }
+                          // Comparar como string para garantir que funciona com IDs string ou número
+                          const isSelected = String(selectedEstablishmentId) === String(establishmentId);
+                          return (
+                            <button
+                              key={establishmentId}
+                              type="button"
+                              onClick={() => {
+                                console.log("🖱️ [MERCHANTS] Clicou no estabelecimento:", {
+                                  establishmentId,
+                                  establishmentIdType: typeof establishmentId,
+                                  establishment: est,
+                                  name: est.name,
+                                  type: est.type,
+                                  isSelected,
+                                  currentSelectedId: selectedEstablishmentId,
+                                  currentSelectedIdType: typeof selectedEstablishmentId,
+                                  formDataEstablishmentId: formData.establishment_id
+                                });
+                                handleEstablishmentSelect(establishmentId);
+                              }}
+                              className={`w-full px-4 py-3 text-left text-sm transition-colors ${
+                                isSelected
+                                  ? "bg-blue-50 text-blue-900"
+                                  : "text-gray-900 hover:bg-gray-50"
+                              }`}
+                            >
+                              <div className="font-medium">{est.name}</div>
+                              {est.type && (
+                                <div className="text-xs text-gray-500">{est.type}</div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-gray-500">
+                Selecione um estabelecimento para alocar o(s) merchant(s).
+              </p>
             </div>
           </div>
         </div>
 
         <div className="rounded-lg bg-white p-6 shadow">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Permissões</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Status</h2>
           
           <div className="space-y-4">
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="can_create_campaigns"
-                name="can_create_campaigns"
-                checked={formData.can_create_campaigns || false}
-                onChange={handleChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label htmlFor="can_create_campaigns" className="ml-2 block text-sm text-gray-900">
-                Pode criar campanhas
-              </label>
-            </div>
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="can_set_custom_points"
-                name="can_set_custom_points"
-                checked={formData.can_set_custom_points || false}
-                onChange={handleChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label htmlFor="can_set_custom_points" className="ml-2 block text-sm text-gray-900">
-                Pode definir pontos personalizados
-              </label>
-            </div>
-
             <div className="flex items-center">
               <input
                 type="checkbox"

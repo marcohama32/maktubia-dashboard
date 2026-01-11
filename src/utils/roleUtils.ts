@@ -43,13 +43,15 @@ export function getUserRole(user: User | null): string {
                   normalizeRole((user as any).role_name) ||
                   normalizeRole((user as any).user_role);
   
-  // Debug: logar o role encontrado
-  if (typeof window !== "undefined" && roleName) {
+  // Debug: logar o role encontrado (apenas em desenvolvimento e se roleName foi encontrado)
+  if (typeof window !== "undefined" && process.env.NODE_ENV === "development" && roleName) {
+    // Só logar se realmente encontrou um role válido
     console.log("🔍 [ROLE] Role detectado:", {
       roleRaw: user.role,
-      roleName: user.role_name,
-      userRole: user.user_role,
+      roleName: user.role_name || (user.role as any)?.name || "não encontrado",
+      userRole: user.user_role || "não encontrado",
       roleNameNormalized: roleName,
+      source: user.role ? "user.role" : user.role_name ? "user.role_name" : user.user_role ? "user.user_role" : "inferido",
     });
   }
   
@@ -101,10 +103,11 @@ export function isUser(user: User | null): boolean {
 }
 
 /**
- * Verifica se o usuário tem acesso (admin ou merchant)
+ * Verifica se o usuário tem acesso (todas as roles podem acessar)
  */
 export function hasAccess(user: User | null): boolean {
-  return isAdmin(user) || isMerchant(user);
+  // Permitir acesso para todas as roles (admin, merchant, cliente, etc.)
+  return !!user;
 }
 
 

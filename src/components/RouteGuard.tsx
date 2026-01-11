@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/AuthContext";
-import { isAdmin, isMerchant, getUserRole } from "@/utils/roleUtils";
+import { isAdmin, isMerchant, isUser, getUserRole } from "@/utils/roleUtils";
 
 // Rotas públicas que não precisam de autenticação
 const PUBLIC_ROUTES = ["/login", "/register", "/forgot-password"];
@@ -12,6 +12,9 @@ const ADMIN_ROUTES = [
   "/admin/users",
   "/admin/campaigns",
   "/admin/friends",
+  "/admin/customers", // Apenas admin pode ver clientes
+  "/admin/establishments", // Apenas admin pode ver estabelecimentos
+  "/admin/bci", // Dashboard BCI - apenas admin
 ];
 
 // Rotas que requerem merchant
@@ -20,15 +23,18 @@ const MERCHANT_ROUTES = [
   "/merchant/campaigns",
 ];
 
-// Rotas que permitem admin e merchant
+// Rotas que permitem admin, merchant e clientes (cada um vê seus próprios dados)
 const SHARED_ROUTES = [
-  "/admin/customers",
   "/admin/redemptions",
   "/admin/points",
   "/admin/transfers",
-  "/admin/documentation",
   "/admin/purchases",
-  "/admin/establishments",
+];
+
+// Rotas que permitem todas as roles (incluindo clientes)
+const USER_ROUTES = [
+  "/admin/documentation", // Guia de uso limitado para clientes
+  "/campaigns", // Campanhas - clientes podem ver todas as campanhas
 ];
 
 interface RouteGuardProps {
@@ -140,39 +146,10 @@ export function RouteGuard({ children }: RouteGuardProps) {
     const userRole = getUserRole(user);
     const userIsAdmin = isAdmin(user);
     const userIsMerchant = isMerchant(user);
+    const userIsUser = isUser(user); // Cliente (role user/cliente/customer)
 
-    // Verificação global: apenas admin e merchant podem acessar o sistema
-    if (!userIsAdmin && !userIsMerchant) {
-      // Debug
-      if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-        console.log("❌ [RouteGuard] Acesso negado - role não permitida:", {
-          pathname,
-          userRole,
-          user: user?.email || user?.username || "N/A",
-        });
-      }
-      // Redirecionar para login se não for admin nem merchant
-      if (!isRedirecting && !redirectingRef.current) {
-        redirectingRef.current = true;
-        setIsRedirecting(true);
-        // Limpar token e deslogar
-        if (typeof window !== "undefined") {
-          localStorage.removeItem("auth_token");
-        }
-        router.replace("/login").catch(() => {
-          window.location.href = "/login";
-        }).finally(() => {
-          // Resetar isRedirecting após um tempo
-          timeoutRef.current = setTimeout(() => {
-            setIsRedirecting(false);
-            redirectingRef.current = false;
-          }, 2000);
-        });
-      }
-      setHasAccess(false);
-      setIsChecking(false);
-      return;
-    }
+    // Permitir acesso para todas as roles (admin, merchant, cliente, etc.)
+    // A verificação de acesso específico por rota será feita abaixo
 
     // Debug: logar informações de verificação
     if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
@@ -188,6 +165,7 @@ export function RouteGuard({ children }: RouteGuardProps) {
     // Verificação especial para a rota raiz (/)
     // Se for merchant, redirecionar para /merchant/dashboard
     // Se for admin, permitir acesso (dashboard admin)
+    // Se for cliente, permitir acesso (pode ter seu próprio dashboard no futuro)
     if (pathname === "/") {
       if (userIsMerchant && !userIsAdmin) {
         // Debug
@@ -219,6 +197,17 @@ export function RouteGuard({ children }: RouteGuardProps) {
         // Debug
         if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
           console.log("✅ [RouteGuard] Admin acessando /, permitindo acesso");
+        }
+        return;
+      }
+      
+      // Cliente pode acessar / (dashboard cliente)
+      if (userIsUser) {
+        setHasAccess(true);
+        setIsChecking(false);
+        // Debug
+        if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+          console.log("✅ [RouteGuard] Cliente acessando /, permitindo acesso");
         }
         return;
       }
@@ -293,22 +282,40 @@ export function RouteGuard({ children }: RouteGuardProps) {
       }
     }
 
-    // Verificar se é rota compartilhada
+    // Verificar se é rota compartilhada (admin, merchant e clientes - cada um vê seus próprios dados)
     const isSharedRoute = SHARED_ROUTES.some(route => pathname.startsWith(route));
     if (isSharedRoute) {
-      accessGranted = userIsAdmin || userIsMerchant;
-      if (!accessGranted) {
-        // Debug
-        if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-          console.log("❌ [RouteGuard] Acesso negado - não é admin nem merchant, redirecionando para /login");
-        }
+      // Permitir acesso para todas as roles (admin, merchant e clientes)
+      // Cada role verá apenas seus próprios dados na página
+      accessGranted = userIsAdmin || userIsMerchant || userIsUser;
+      // Debug
+      if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+        console.log("✅ [RouteGuard] Acesso concedido - rota compartilhada (admin, merchant e clientes)");
+      }
+    }
+
+    // Verificar se é rota de usuário (clientes podem acessar)
+    const isUserRoute = USER_ROUTES.some(route => pathname.startsWith(route));
+    if (isUserRoute) {
+      // Permitir acesso para todas as roles, mas com conteúdo limitado para clientes
+      accessGranted = true;
+      // Debug
+      if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+        console.log("✅ [RouteGuard] Acesso concedido - rota de usuário");
+      }
+    }
+
+    // Se não é nenhuma rota específica, verificar se cliente pode acessar
+    if (!isAdminRoute && !isMerchantRoute && !isSharedRoute && !isUserRoute) {
+      // Clientes só podem acessar dashboard (/) e rotas de usuário
+      if (userIsUser && pathname !== "/") {
+        // Cliente tentando acessar rota não permitida - redirecionar
         if (!isRedirecting && !redirectingRef.current) {
           redirectingRef.current = true;
           setIsRedirecting(true);
-          router.replace("/login").catch(() => {
-            window.location.href = "/login";
+          router.replace("/").catch(() => {
+            window.location.href = "/";
           }).finally(() => {
-            // Resetar isRedirecting após um tempo
             timeoutRef.current = setTimeout(() => {
               setIsRedirecting(false);
               redirectingRef.current = false;
@@ -319,14 +326,6 @@ export function RouteGuard({ children }: RouteGuardProps) {
         setIsChecking(false);
         return;
       }
-      // Debug
-      if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-        console.log("✅ [RouteGuard] Acesso concedido - rota compartilhada");
-      }
-    }
-
-    // Se não é nenhuma rota específica, permitir acesso (pode ser rota pública ou dashboard)
-    if (!isAdminRoute && !isMerchantRoute && !isSharedRoute) {
       accessGranted = true;
       // Debug
       if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {

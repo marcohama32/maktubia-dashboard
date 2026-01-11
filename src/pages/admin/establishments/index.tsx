@@ -39,34 +39,22 @@ export default function EstablishmentsPage() {
       setError("");
       const data = await establishmentService.getAll();
       
-      // Filtrar estabelecimentos com ID válido (a normalização já foi feita no serviço)
+      // Filtrar estabelecimentos com ID válido
       const validEstablishments = data.filter((est) => {
-        const hasValidId = est && est.id != null && !isNaN(Number(est.id)) && Number(est.id) > 0;
-        if (!hasValidId) {
-          console.warn("⚠️ Estabelecimento sem ID válido ignorado:", {
-            name: est?.name,
-            type: est?.type,
-            id: est?.id
-          });
-        }
-        return hasValidId;
+        return est && est.id != null && !isNaN(Number(est.id)) && Number(est.id) > 0;
       });
-      
-      // Log informativo se houver estabelecimentos inválidos
-      const invalidCount = data.length - validEstablishments.length;
-      if (invalidCount > 0) {
-        console.warn(`⚠️ ${invalidCount} estabelecimento(s) sem ID válido foram ignorados de ${data.length} total`);
-      }
       
       setEstablishments(validEstablishments);
     } catch (err: any) {
-      console.error("Erro ao carregar estabelecimentos:", err);
-      const errorMessage = err.message || "Erro ao carregar estabelecimentos";
-      setError(errorMessage);
+      // Não mostrar erro para o usuário - apenas definir array vazio
+      // A página mostrará mensagem amigável de "nenhum dado disponível"
+      setEstablishments([]);
       
-      // Se for erro 500, sugere verificar o backend
-      if (err.message?.includes("servidor") || err.message?.includes("500")) {
-        console.warn("Erro 500: Verifique se o backend está funcionando e se o endpoint /api/establishments existe");
+      // Apenas logar erro no console para debug (não mostrar para usuário)
+      const isNetworkError = err.isNetworkError || err.message?.includes("Servidor não disponível");
+      if (!isNetworkError) {
+        // Apenas logar, não mostrar erro na UI
+        console.error("Erro ao carregar estabelecimentos:", err);
       }
     } finally {
       setLoading(false);
@@ -305,11 +293,6 @@ export default function EstablishmentsPage() {
         </div>
       </div>
 
-      {error && (
-        <div className="mb-4 rounded-lg bg-red-50 p-4 text-red-700">
-          {error}
-        </div>
-      )}
 
       {/* Renderizar conteúdo imediatamente - sempre mostrar estrutura */}
       {filteredEstablishments.length > 0 ? (
@@ -545,9 +528,19 @@ export default function EstablishmentsPage() {
         </>
       ) : filteredEstablishments.length === 0 && !loading ? (
         <div className="rounded-lg bg-white py-12 text-center shadow">
-          <p className="text-lg text-gray-500">
-            {searchTerm ? "Nenhum estabelecimento encontrado com essa pesquisa" : "Nenhum estabelecimento encontrado"}
-          </p>
+          <div className="flex flex-col items-center justify-center">
+            <svg className="h-16 w-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+            <p className="text-lg font-medium text-gray-700 mb-1">
+              {searchTerm ? "Nenhum estabelecimento encontrado" : "Nenhum estabelecimento cadastrado"}
+            </p>
+            <p className="text-sm text-gray-500">
+              {searchTerm 
+                ? "Tente ajustar os termos de pesquisa" 
+                : "Comece criando um novo estabelecimento"}
+            </p>
+          </div>
         </div>
       ) : null}
 

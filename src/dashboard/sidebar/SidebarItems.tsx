@@ -4,7 +4,7 @@ import { getSidebarData, iconMap, SidebarItem } from "./data";
 import { useRouter } from "next/router";
 import { useCallback, useMemo, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { isAdmin, isMerchant, getUserRole } from "@/utils/roleUtils";
+import { isAdmin, isMerchant, isUser, getUserRole } from "@/utils/roleUtils";
 
 const style = {
   title: "font-normal mx-4 text-sm",
@@ -114,10 +114,11 @@ export function SidebarItems() {
       return data;
     }
     
-    // Verificar se o usuário é admin ou merchant
+    // Verificar se o usuário é admin, merchant ou cliente
     const userRole = getUserRole(user);
     const userIsAdmin = isAdmin(user);
     const userIsMerchant = isMerchant(user);
+    const userIsUser = isUser(user); // Cliente (role user/cliente/customer)
     
     // Debug: logar informações do usuário
     if (typeof window !== "undefined") {
@@ -143,6 +144,15 @@ export function SidebarItems() {
       
       // Apenas admin pode ver Usuários
       if (item.link === "/admin/users") {
+        const shouldShow = userIsAdmin;
+        if (typeof window !== "undefined") {
+          console.log(`  ${shouldShow ? "✅" : "❌"} ${item.title} (${item.link}): ${shouldShow ? "VISÍVEL" : "OCULTO"} - isAdmin=${userIsAdmin}, role="${userRole}"`);
+        }
+        return shouldShow;
+      }
+      
+      // Apenas admin pode ver BCI
+      if (item.link === "/admin/bci") {
         const shouldShow = userIsAdmin;
         if (typeof window !== "undefined") {
           console.log(`  ${shouldShow ? "✅" : "❌"} ${item.title} (${item.link}): ${shouldShow ? "VISÍVEL" : "OCULTO"} - isAdmin=${userIsAdmin}, role="${userRole}"`);
@@ -179,15 +189,64 @@ export function SidebarItems() {
 
       // Admin não deve ver "Campanhas Públicas" e "Minhas Campanhas" (apenas "Campanhas")
       if (item.link === "/admin/campaigns" && item.title === "Campanhas") {
-        const shouldShow = userIsAdmin || !userIsMerchant; // Admin vê, merchant não vê
+        const shouldShow = userIsAdmin; // Apenas admin vê
         if (typeof window !== "undefined") {
           console.log(`  ${shouldShow ? "✅" : "❌"} ${item.title} (${item.link}): ${shouldShow ? "VISÍVEL" : "OCULTO"} - isAdmin=${userIsAdmin}, isMerchant=${userIsMerchant}, role="${userRole}"`);
         }
         return shouldShow;
       }
       
-      // Outros itens podem ser visíveis para admin e merchant
-      // (o controle de acesso específico será feito nas páginas)
+      // Clientes não devem ver: Clientes, Estabelecimentos, Campanhas (admin)
+      // Mas podem ver Campanhas (públicas)
+      if (item.link === "/admin/customers" || item.link === "/admin/establishments") {
+        const shouldShow = !userIsUser; // Clientes não veem
+        if (typeof window !== "undefined") {
+          console.log(`  ${shouldShow ? "✅" : "❌"} ${item.title} (${item.link}): ${shouldShow ? "VISÍVEL" : "OCULTO"} - isUser=${userIsUser}, role="${userRole}"`);
+        }
+        return shouldShow;
+      }
+
+      // Campanhas (admin) - apenas admin
+      if (item.link === "/admin/campaigns" && item.title === "Campanhas") {
+        const shouldShow = userIsAdmin; // Apenas admin
+        if (typeof window !== "undefined") {
+          console.log(`  ${shouldShow ? "✅" : "❌"} ${item.title} (${item.link}): ${shouldShow ? "VISÍVEL" : "OCULTO"} - isAdmin=${userIsAdmin}, role="${userRole}"`);
+        }
+        return shouldShow;
+      }
+
+      // Campanhas (públicas) - clientes podem ver
+      if (item.link === "/campaigns" && item.title === "Campanhas") {
+        const shouldShow = userIsUser || userIsMerchant; // Clientes e merchants podem ver
+        if (typeof window !== "undefined") {
+          console.log(`  ${shouldShow ? "✅" : "❌"} ${item.title} (${item.link}): ${shouldShow ? "VISÍVEL" : "OCULTO"} - isUser=${userIsUser}, isMerchant=${userIsMerchant}, role="${userRole}"`);
+        }
+        return shouldShow;
+      }
+      
+      // Guia de Uso - limitado para clientes (pode ver mas com conteúdo limitado)
+      if (item.link === "/admin/documentation") {
+        // Todas as roles podem ver, mas o conteúdo será limitado na página
+        return true;
+      }
+      
+      // Clientes podem ver: Dashboard, Campanhas, Pontos (com submenu), Compras, Guia de Uso
+      if (userIsUser) {
+        // Cliente pode ver seus próprios dados
+        // Item "Pontos" tem link "#" e filhos, então verificar pelo título
+        const allowedForUser = 
+          item.link === "/" || 
+          item.link === "/campaigns" ||
+          item.link === "/admin/documentation" || 
+          item.link === "/admin/purchases" ||
+          item.link === "/logout" ||
+          (item.link === "#" && item.title === "Pontos"); // Item "Pontos" com submenu
+        if (typeof window !== "undefined") {
+          console.log(`  ${allowedForUser ? "✅" : "❌"} ${item.title} (${item.link}): ${allowedForUser ? "VISÍVEL" : "OCULTO"} - isUser=${userIsUser}, role="${userRole}"`);
+        }
+        return allowedForUser;
+      }
+      
       return true;
     });
     

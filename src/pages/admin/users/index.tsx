@@ -24,7 +24,6 @@ function UsersPageContent() {
   const [loadingCustomers, setLoadingCustomers] = useState(false);
   
   // Estados compartilhados
-  const [error, setError] = useState<string>("");
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -54,11 +53,31 @@ function UsersPageContent() {
   const loadEmployees = async () => {
     try {
       setLoadingEmployees(true);
-      setError("");
       const response = await userService.getAll(currentPage, ITEMS_PER_PAGE);
-      setEmployees(response.data || []);
-      setPagination(response.pagination || null);
+      
+      console.log("📊 [USERS PAGE] Resposta do service:", response);
+      console.log("📊 [USERS PAGE] response.data:", response.data);
+      console.log("📊 [USERS PAGE] response.data.length:", response.data?.length);
+      console.log("📊 [USERS PAGE] response.pagination:", response.pagination);
+      console.log("📊 [USERS PAGE] response.success:", response.success);
+      
+      // Verificar se response.data existe e é um array
+      if (response && response.data && Array.isArray(response.data)) {
+        console.log("✅ [USERS PAGE] Dados válidos encontrados, definindo employees");
+        setEmployees(response.data);
+        setPagination(response.pagination || null);
+      } else {
+        console.warn("⚠️ [USERS PAGE] Resposta inválida ou sem dados:", response);
+        setEmployees([]);
+        setPagination(null);
+      }
     } catch (err: any) {
+      // Não mostrar erro para o usuário - apenas definir array vazio
+      // A página mostrará mensagem amigável de "nenhum dado disponível"
+      setEmployees([]);
+      setPagination(null);
+      
+      // Apenas logar erro no console para debug (não mostrar para usuário)
       const isNetworkError = err.isNetworkError || 
         err.message === "Network Error" || 
         err.code === "ERR_NETWORK" ||
@@ -67,8 +86,6 @@ function UsersPageContent() {
       if (!isNetworkError) {
         console.error("Erro ao carregar funcionários:", err);
       }
-      const errorMessage = err.message || "Erro ao carregar funcionários";
-      setError(errorMessage);
     } finally {
       setLoadingEmployees(false);
     }
@@ -77,11 +94,16 @@ function UsersPageContent() {
   const loadCustomers = async () => {
     try {
       setLoadingCustomers(true);
-      setError("");
       const response = await customerService.getAll(currentPage, ITEMS_PER_PAGE);
       setCustomers(response.data || []);
       setPagination(response.pagination || null);
     } catch (err: any) {
+      // Não mostrar erro para o usuário - apenas definir array vazio
+      // A página mostrará mensagem amigável de "nenhum dado disponível"
+      setCustomers([]);
+      setPagination(null);
+      
+      // Apenas logar erro no console para debug (não mostrar para usuário)
       const isNetworkError = err.isNetworkError || 
         err.message === "Network Error" || 
         err.code === "ERR_NETWORK" ||
@@ -90,8 +112,6 @@ function UsersPageContent() {
       if (!isNetworkError) {
         console.error("Erro ao carregar clientes:", err);
       }
-      const errorMessage = err.message || "Erro ao carregar clientes";
-      setError(errorMessage);
     } finally {
       setLoadingCustomers(false);
     }
@@ -99,20 +119,57 @@ function UsersPageContent() {
 
   // Filtrar dados baseado na aba ativa e termo de busca
   const filteredData = useMemo(() => {
+    console.log("🔍 [FILTER] Filtrando dados - activeTab:", activeTab);
+    console.log("🔍 [FILTER] employees.length:", employees.length);
+    console.log("🔍 [FILTER] customers.length:", customers.length);
+    console.log("🔍 [FILTER] employees:", employees);
+    
     let data: (User | Customer)[] = [];
     
     if (activeTab === "admin") {
+      // Mostrar todos os employees primeiro, depois filtrar por role se necessário
       data = employees.filter(user => {
         const roleName = getUserRole(user);
-        return roleName === "admin" || roleName === "administrator" || roleName === "administrador";
+        const isAdmin = roleName === "admin" || roleName === "administrator" || roleName === "administrador";
+        console.log("🔍 [FILTER] User:", user.username || user.email, "Role:", roleName, "IsAdmin:", isAdmin);
+        return isAdmin;
       });
+      console.log("🔍 [FILTER] Admin users filtrados:", data.length);
+      
+      // Se não encontrou nenhum admin mas há employees, mostrar todos para debug
+      if (data.length === 0 && employees.length > 0) {
+        console.warn("⚠️ [FILTER] Nenhum admin encontrado, mas há", employees.length, "employees");
+        console.warn("⚠️ [FILTER] Roles encontrados:", employees.map(e => ({ 
+          username: e.username || e.email, 
+          role: getUserRole(e),
+          roleObj: e.role 
+        })));
+        // Mostrar todos temporariamente para debug
+        data = employees;
+      }
     } else if (activeTab === "merchants") {
       data = employees.filter(user => {
         const roleName = getUserRole(user);
-        return roleName === "merchant" || roleName === "merchante" || roleName === "comerciante";
+        const isMerchant = roleName === "merchant" || roleName === "merchante" || roleName === "comerciante";
+        console.log("🔍 [FILTER] User:", user.username || user.email, "Role:", roleName, "IsMerchant:", isMerchant);
+        return isMerchant;
       });
+      console.log("🔍 [FILTER] Merchant users filtrados:", data.length);
+      
+      // Se não encontrou nenhum merchant mas há employees, mostrar todos para debug
+      if (data.length === 0 && employees.length > 0) {
+        console.warn("⚠️ [FILTER] Nenhum merchant encontrado, mas há", employees.length, "employees");
+        console.warn("⚠️ [FILTER] Roles encontrados:", employees.map(e => ({ 
+          username: e.username || e.email, 
+          role: getUserRole(e),
+          roleObj: e.role 
+        })));
+        // Mostrar todos temporariamente para debug
+        data = employees;
+      }
     } else if (activeTab === "clientes") {
       data = customers;
+      console.log("🔍 [FILTER] Clientes:", data.length);
     }
     
     if (!searchTerm.trim()) {
@@ -319,11 +376,6 @@ function UsersPageContent() {
         </div>
       </div>
 
-      {error && (
-        <div className="mb-4 rounded-lg bg-red-50 p-4 text-red-700">
-          {error}
-        </div>
-      )}
 
       {/* Tabela */}
       {filteredData.length > 0 ? (
@@ -372,10 +424,26 @@ function UsersPageContent() {
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {paginatedData.map((item) => {
                     const user = item as User | Customer;
+                    // Extrair código do usuário - tentar múltiplos formatos
+                    const userCode = (user as any).userCode || (user as any).user_code || (user as any).code;
+                    
+                    // Log apenas para debug (primeiro item)
+                    if (paginatedData.indexOf(item) === 0) {
+                      console.log("🔍 [USERS LIST] Primeiro usuário:", {
+                        id: user.id,
+                        username: (user as any).username,
+                        userCode: (user as any).userCode,
+                        user_code: (user as any).user_code,
+                        code: (user as any).code,
+                        extractedCode: userCode,
+                        allKeys: Object.keys(user as any)
+                      });
+                    }
+                    
                     return (
                       <tr key={user.id} className="hover:bg-gray-50">
-                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                          {(user as any).user_code || (user as any).userCode || (user as any).code || `#${user.id}`}
+                        <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
+                          {userCode || `#${user.id}`}
                         </td>
                         <td className="whitespace-nowrap px-6 py-4">
                           <div className="flex items-center">
@@ -557,9 +625,23 @@ function UsersPageContent() {
       {/* Mensagem quando não há dados */}
       {filteredData.length === 0 && !loading ? (
         <div className="rounded-lg bg-white py-12 text-center shadow">
-          <p className="text-lg text-gray-500">
-            {searchTerm ? `Nenhum ${activeTab === "clientes" ? "cliente" : "usuário"} encontrado com essa pesquisa` : `Nenhum ${activeTab === "clientes" ? "cliente" : "usuário"} encontrado`}
-          </p>
+          <div className="flex flex-col items-center justify-center">
+            <svg className="h-16 w-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+            <p className="text-lg font-medium text-gray-700 mb-1">
+              {searchTerm 
+                ? `Nenhum ${activeTab === "clientes" ? "cliente" : "usuário"} encontrado` 
+                : `Nenhum ${activeTab === "clientes" ? "cliente" : "usuário"} cadastrado`}
+            </p>
+            <p className="text-sm text-gray-500">
+              {searchTerm 
+                ? "Tente ajustar os termos de pesquisa" 
+                : activeTab === "clientes" 
+                  ? "Os clientes aparecerão aqui quando forem cadastrados"
+                  : "Os usuários aparecerão aqui quando forem cadastrados"}
+            </p>
+          </div>
         </div>
       ) : null}
 

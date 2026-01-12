@@ -49,11 +49,6 @@ export const sidebarItems: SidebarItem[] = [
     link: "/admin/campaigns",
   },
   {
-    title: "Campanhas",
-    icon: "PurchaseIcon",
-    link: "/campaigns",
-  },
-  {
     title: "Campanhas Públicas",
     icon: "PurchaseIcon",
     link: "/merchant/campaigns/public",
@@ -89,11 +84,6 @@ export const sidebarItems: SidebarItem[] = [
     title: "Estabelecimentos",
     icon: "EstablishmentIcon",
     link: "/admin/establishments",
-  },
-  {
-    title: "BCI",
-    icon: "PurchaseIcon",
-    link: "/admin/bci",
   },
   {
     title: "Compras",

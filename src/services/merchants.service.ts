@@ -92,7 +92,7 @@ export interface GetAllMerchantsParams {
 }
 
 export interface GetMerchantsByEstablishmentParams {
-  establishmentId: string | number;
+  establishmentId: number;
   page?: number;
   limit?: number;
   is_active?: boolean;
@@ -233,9 +233,7 @@ export const merchantsService = {
       if (params.limit !== undefined) queryParams.limit = params.limit;
       if (params.is_active !== undefined) queryParams.is_active = params.is_active;
 
-      // Converter ID para string para a URL (aceita tanto números quanto strings)
-      const establishmentIdString = String(params.establishmentId);
-      const response = await api.get(`/merchants/establishment/${establishmentIdString}`, { params: queryParams });
+      const response = await api.get(`/merchants/establishment/${params.establishmentId}`, { params: queryParams });
 
       // Nova estrutura: { success: true, data: [...], pagination: {...} }
       if (response.data?.success !== undefined) {

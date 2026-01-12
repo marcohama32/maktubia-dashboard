@@ -4,7 +4,6 @@ import { establishmentService, Establishment } from "@/services/establishment.se
 import { merchantsService, Merchant } from "@/services/merchants.service";
 import { processImageUrl } from "@/utils/imageUrl";
 import { QRCodeSVG } from "qrcode.react";
-import { AlertModal } from "@/components/modals/AlertModal";
 
 export default function EstablishmentDetailsPage() {
   const router = useRouter();
@@ -17,8 +16,6 @@ export default function EstablishmentDetailsPage() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isAutoPlay, setIsAutoPlay] = useState(true);
   const qrCodeRef = useRef<HTMLDivElement>(null);
-  const [alertModalOpen, setAlertModalOpen] = useState(false);
-  const [alertConfig, setAlertConfig] = useState<{ title: string; message: string; type: "success" | "error" | "warning" | "info" } | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -26,9 +23,9 @@ export default function EstablishmentDetailsPage() {
       setIsAutoPlay(true); // Reset autoplay when establishment changes
       // Carregar dados de forma assíncrona após a primeira renderização completa
       if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-        (window as any).requestIdleCallback(() => loadEstablishment(id as string | number), { timeout: 100 });
+        (window as any).requestIdleCallback(() => loadEstablishment(Number(id)), { timeout: 100 });
       } else {
-        setTimeout(() => loadEstablishment(id as string | number), 50);
+        setTimeout(() => loadEstablishment(Number(id)), 50);
       }
     }
   }, [id]);
@@ -39,12 +36,7 @@ export default function EstablishmentDetailsPage() {
     if (show_merchant_warning === "true" && establishment && merchants.length === 0) {
       // Mostrar aviso após carregar merchants
       setTimeout(() => {
-        setAlertConfig({
-          title: "Atenção",
-          message: "Este estabelecimento não possui merchants alocados. Por favor, aloque pelo menos um merchant para que o estabelecimento possa ser gerenciado.",
-          type: "warning",
-        });
-        setAlertModalOpen(true);
+        alert("⚠️ ATENÇÃO: Este estabelecimento não possui merchants alocados. Por favor, aloque pelo menos um merchant para que o estabelecimento possa ser gerenciado.");
       }, 1000);
     }
   }, [establishment, merchants, router.query]);
@@ -248,7 +240,7 @@ export default function EstablishmentDetailsPage() {
     };
   }, [establishment, isAutoPlay]);
 
-  const loadEstablishment = async (establishmentId: string | number) => {
+  const loadEstablishment = async (establishmentId: number) => {
     try {
       setLoading(true);
       setError("");
@@ -283,7 +275,7 @@ export default function EstablishmentDetailsPage() {
     }
   };
 
-  const loadMerchants = async (establishmentId: string | number) => {
+  const loadMerchants = async (establishmentId: number) => {
     try {
       setLoadingMerchants(true);
       const response = await merchantsService.getMerchantsByEstablishment({
@@ -365,13 +357,13 @@ export default function EstablishmentDetailsPage() {
         <div className="flex gap-2">
           <button
             onClick={() => {
-              if (establishment?.id) {
+              if (establishment?.id && !isNaN(Number(establishment.id))) {
                 router.push(`/admin/establishments/${establishment.id}/edit`);
               } else {
                 console.warn("Não é possível editar: estabelecimento sem ID válido");
               }
             }}
-            disabled={!establishment?.id}
+            disabled={!establishment?.id || isNaN(Number(establishment?.id))}
             className="rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Editar
@@ -814,6 +806,42 @@ export default function EstablishmentDetailsPage() {
                         )}
                       </div>
                       
+                      <div className="mt-3 space-y-2">
+                        <div className="flex items-center gap-2 text-sm">
+                          {canCreateCampaigns ? (
+                            <span className="inline-flex items-center gap-1 text-green-700">
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              Pode criar campanhas
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-gray-500">
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                              Não pode criar campanhas
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          {canSetCustomPoints ? (
+                            <span className="inline-flex items-center gap-1 text-green-700">
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              Pode definir pontos personalizados
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-gray-500">
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                              Não pode definir pontos personalizados
+                            </span>
+                          )}
+                        </div>
+                      </div>
                       
                       <div className="mt-4 flex gap-2">
                         <button
@@ -932,22 +960,6 @@ export default function EstablishmentDetailsPage() {
           )}
         </div>
       </div>
-
-      {/* Modal de Alerta */}
-      {alertConfig && (
-        <AlertModal
-          isOpen={alertModalOpen}
-          onClose={() => {
-            setAlertModalOpen(false);
-            setAlertConfig(null);
-          }}
-          title={alertConfig.title}
-          message={alertConfig.message}
-          type={alertConfig.type}
-          confirmText="OK"
-          autoClose={0}
-        />
-      )}
     </div>
   );
 }

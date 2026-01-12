@@ -535,29 +535,12 @@ export const campaignsService = {
           success: response.data.success,
           data: response.data.data || [],
           pagination: response.data.pagination,
-          generalMetrics: response.data.generalMetrics,
         };
       } else {
-        // Tentar diferentes estruturas
-        let dataArray: Campaign[] = [];
-        
-        if (Array.isArray(response.data)) {
-          dataArray = response.data;
-        } else if (Array.isArray(response.data?.data)) {
-          dataArray = response.data.data;
-        } else if (Array.isArray(response.data?.campaigns)) {
-          dataArray = response.data.campaigns;
-        } else if (Array.isArray(response.data?.results)) {
-          dataArray = response.data.results;
-        } else if (Array.isArray(response.data?.items)) {
-          dataArray = response.data.items;
-        }
-        
         return {
           success: true,
-          data: dataArray,
+          data: response.data?.data || response.data || [],
           pagination: response.data?.pagination,
-          generalMetrics: response.data?.generalMetrics,
         };
       }
     } catch (err: any) {

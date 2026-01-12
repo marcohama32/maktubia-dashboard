@@ -434,7 +434,7 @@ export default function DocumentationPage() {
         )}
       </div>
 
-      {/* Seção 5/6: Clientes */}
+      {/* Seção Clientes */}
       <div id="clientes" className="rounded-lg bg-white p-6 shadow-md">
         <h2 
           className="mb-4 flex cursor-pointer items-center justify-between text-2xl font-bold text-gray-900"
@@ -442,7 +442,7 @@ export default function DocumentationPage() {
         >
           <span>{userIsMerchant ? "5" : "6"}. 🛒 {userIsMerchant ? "Visualizar" : "Gerenciar"} Clientes</span>
           <svg 
-            className={`h-6 w-6 transition-transform${expandedSection === "clientes" ? "rotate-180" : ""}`}
+            className={`h-6 w-6 transition-transform ${expandedSection === "clientes" ? "rotate-180" : ""}`}
             fill="none" 
             stroke="currentColor" 
             viewBox="0 0 24 24"

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/AuthContext";
 import { campaignsService, CreateCampaignDTO } from "@/services/campaigns.service";
@@ -11,10 +11,6 @@ export default function NewCampaignPage() {
   const router = useRouter();
   const { user } = useAuth();
   const [establishments, setEstablishments] = useState<any[]>([]);
-  const [selectedEstablishments, setSelectedEstablishments] = useState<number[]>([]);
-  const [establishmentSearchTerm, setEstablishmentSearchTerm] = useState<string>("");
-  const [isEstablishmentDropdownOpen, setIsEstablishmentDropdownOpen] = useState(false);
-  const establishmentDropdownRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>("");
@@ -83,7 +79,7 @@ export default function NewCampaignPage() {
     booking_points_earned?: number;
     booking_confirmation_required?: boolean;
   }>({
-    establishment_id: 0, // Mantido para compatibilidade, mas usaremos selectedEstablishments
+    establishment_id: 0,
     // Campos obrigatórios do schema (CR#3)
     campaign_name: "",
     reward_value_mt: 0,
@@ -574,20 +570,6 @@ export default function NewCampaignPage() {
     }
   }, [user]);
 
-  // Fechar dropdown ao clicar fora
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (establishmentDropdownRef.current && !establishmentDropdownRef.current.contains(event.target as Node)) {
-        setIsEstablishmentDropdownOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
   const loadEstablishments = async () => {
     try {
       setLoading(true);
@@ -600,19 +582,25 @@ export default function NewCampaignPage() {
         console.log("🔍 [NEW CAMPAIGN] Usuário é admin - carregando todos os estabelecimentos");
         establishmentsData = await establishmentService.getAll(true);
       } 
-      // Se for merchant, carregar estabelecimentos do merchant
+      // Se for merchant, carregar apenas estabelecimentos do merchant com permissão
       else if (isMerchant(user)) {
         console.log("🔍 [NEW CAMPAIGN] Usuário é merchant - carregando estabelecimentos do merchant");
         const response = await merchantsService.getMyEstablishments();
-        establishmentsData = response.data || [];
-        console.log("✅ [NEW CAMPAIGN] Estabelecimentos carregados:", establishmentsData.length);
+        // Filtrar apenas estabelecimentos com permissão de criar campanhas
+        establishmentsData = (response.data || []).filter((e: any) => 
+          e.merchant_permissions?.can_create_campaigns === true
+        );
+        console.log("✅ [NEW CAMPAIGN] Estabelecimentos com permissão:", establishmentsData.length);
       } 
       // Se não tiver role definido, tentar carregar como merchant primeiro
       else {
         console.log("🔍 [NEW CAMPAIGN] Role não definido - tentando carregar como merchant");
         try {
           const response = await merchantsService.getMyEstablishments();
-          establishmentsData = response.data || [];
+          // Filtrar apenas estabelecimentos com permissão de criar campanhas
+          establishmentsData = (response.data || []).filter((e: any) => 
+            e.merchant_permissions?.can_create_campaigns === true
+          );
         } catch (merchantErr) {
           // Se falhar, tentar como admin
           console.log("🔍 [NEW CAMPAIGN] Falhou como merchant - tentando como admin");
@@ -621,25 +609,19 @@ export default function NewCampaignPage() {
       }
       
       console.log("✅ [NEW CAMPAIGN] Estabelecimentos carregados:", establishmentsData.length);
-      console.log("🔍 [NEW CAMPAIGN] Estabelecimentos detalhes:", establishmentsData.map((e: any) => ({
-        id: e.id,
-        establishment_id: e.establishment_id,
-        name: e.name,
-        type: e.type,
-        allKeys: Object.keys(e)
-      })));
       
-      // Se não houver estabelecimentos, mostrar mensagem
-      if (establishmentsData.length === 0) {
-        setError("Nenhum estabelecimento encontrado. Entre em contato com o administrador.");
+      // Se for merchant e não houver estabelecimentos com permissão, mostrar mensagem
+      if ((isMerchant(user) || !isAdmin(user)) && establishmentsData.length === 0) {
+        setError("Você não tem permissão para criar campanhas em nenhum estabelecimento. Entre em contato com o administrador.");
       }
       
       setEstablishments(establishmentsData);
     } catch (err: any) {
-      // Não mostrar erro para o usuário - apenas definir array vazio
-      // A página mostrará mensagem amigável
-      setEstablishments([]);
-      setError(""); // Limpar qualquer erro anterior
+      console.error("❌ [NEW CAMPAIGN] Erro ao carregar estabelecimentos:", err);
+      const isNetworkError = err.isNetworkError || err.message?.includes("Servidor não disponível");
+      if (!isNetworkError) {
+        setError(err.message || "Erro ao carregar estabelecimentos");
+      }
     } finally {
       setLoading(false);
     }
@@ -647,55 +629,39 @@ export default function NewCampaignPage() {
   
   // Função auxiliar para verificar se pode criar campanha no estabelecimento
   const canCreateCampaign = (establishmentId: number): boolean => {
-    // Todos os usuários autenticados podem criar campanhas
-    return true;
-  };
-
-  // Filtrar estabelecimentos baseado no termo de pesquisa
-  const filteredEstablishments = establishments.filter((est) => {
-    if (!establishmentSearchTerm || establishmentSearchTerm.trim() === "") {
+    // Admin pode criar em qualquer estabelecimento
+    if (isAdmin(user)) {
       return true;
     }
-    const searchLower = establishmentSearchTerm.toLowerCase().trim();
-    const name = (est.name || "").toLowerCase();
-    const type = (est.type || "").toLowerCase();
-    return name.includes(searchLower) || type.includes(searchLower);
-  });
-
-  // Toggle seleção de estabelecimento
-  const toggleEstablishmentSelection = (establishmentId: number) => {
-    setSelectedEstablishments(prev => {
-      if (prev.includes(establishmentId)) {
-        return prev.filter(id => id !== establishmentId);
-      } else {
-        return [...prev, establishmentId];
-      }
-    });
-  };
-
-  // Selecionar/Deselecionar todos
-  const toggleSelectAllEstablishments = () => {
-    if (selectedEstablishments.length === filteredEstablishments.length) {
-      setSelectedEstablishments([]);
-    } else {
-      setSelectedEstablishments(filteredEstablishments.map(est => est.id || est.establishment_id).filter(id => id) as number[]);
-    }
+    
+    // Merchant precisa verificar permissão
+    const establishment = establishments.find(e => e.id === establishmentId);
+    return establishment?.merchant_permissions?.can_create_campaigns === true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (selectedEstablishments.length === 0) {
+    if (!formData.establishment_id || formData.establishment_id === 0) {
       setAlertConfig({
         title: "Erro!",
-        message: "Por favor, selecione pelo menos um estabelecimento.",
+        message: "Por favor, selecione um estabelecimento.",
         type: "error",
       });
       setAlertModalOpen(true);
       return;
     }
 
-    // Validação de permissão removida - todos os usuários autenticados podem criar campanhas
+    // Validar permissão para criar campanha (apenas para merchants)
+    if (!isAdmin(user) && !canCreateCampaign(formData.establishment_id)) {
+      setAlertConfig({
+        title: "Erro!",
+        message: "Você não tem permissão para criar campanhas neste estabelecimento. Entre em contato com o administrador.",
+        type: "error",
+      });
+      setAlertModalOpen(true);
+      return;
+    }
 
     if (!formData.campaign_name || !formData.valid_from || !formData.valid_until || 
         formData.reward_value_mt === undefined || formData.reward_value_mt === null || 
@@ -891,13 +857,10 @@ export default function NewCampaignPage() {
       
       // Preparar dados para envio - usar campos do schema da API
       // Campos obrigatórios: establishment_id, campaign_name, reward_value_mt, reward_points_cost, valid_from, valid_until
-      // Criar uma campanha para cada estabelecimento selecionado
-      const createdCampaigns = [];
-      for (const establishmentId of selectedEstablishments) {
-        // IMPORTANTE: NÃO enviar campaign_id - ele é gerado automaticamente pelo banco
-        const campaignData: any = {
-          // Campos obrigatórios
-          establishment_id: Number(establishmentId), // Garantir que é número
+      // IMPORTANTE: NÃO enviar campaign_id - ele é gerado automaticamente pelo banco
+      const campaignData: any = {
+        // Campos obrigatórios
+        establishment_id: Number(formData.establishment_id), // Garantir que é número
         campaign_name: formData.campaign_name,
         reward_value_mt: Number(formData.reward_value_mt),
         reward_points_cost: Number(formData.reward_points_cost),
@@ -1050,22 +1013,26 @@ export default function NewCampaignPage() {
         delete campaignData.id;
       }
 
-        console.log(`📤 [NEW CAMPAIGN] Enviando dados para estabelecimento ${establishmentId}:`, campaignData);
-        const createdCampaign = await campaignsService.create(campaignData);
-        console.log(`✅ [NEW CAMPAIGN] Campanha criada para estabelecimento ${establishmentId}:`, createdCampaign);
-        createdCampaigns.push(createdCampaign);
-      }
+      console.log("📤 [NEW CAMPAIGN] Enviando dados:", campaignData);
+      console.log("📤 [NEW CAMPAIGN] Dados após remoção de undefined:", JSON.stringify(campaignData, null, 2));
+      const createdCampaign = await campaignsService.create(campaignData);
+      console.log("✅ [NEW CAMPAIGN] Campanha criada:", createdCampaign);
       
       setAlertConfig({
         title: "Sucesso!",
-        message: `${createdCampaigns.length} campanha${createdCampaigns.length !== 1 ? "s" : ""} criada${createdCampaigns.length !== 1 ? "s" : ""} com sucesso!`,
+        message: "Campanha criada com sucesso!",
         type: "success",
       });
       setAlertModalOpen(true);
       
       // Redirecionar após 2 segundos (tempo suficiente para o modal aparecer)
+      const campaignId = createdCampaign.campaign_id || createdCampaign.id || createdCampaign.campaign_number;
       setTimeout(() => {
-        router.push("/admin/campaigns");
+        if (campaignId) {
+          router.push(`/admin/campaigns/${campaignId}`);
+        } else {
+          router.push("/admin/campaigns");
+        }
       }, 2000);
     } catch (err: any) {
       console.error("❌ [NEW CAMPAIGN] Erro ao criar campanha:", err);
@@ -1127,7 +1094,7 @@ export default function NewCampaignPage() {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value, type } = e.target;
+    const { name, value } = e.target;
     
     // Se mudou o tipo de campanha, limpar campos específicos que não se aplicam
     if (name === "type") {
@@ -1161,28 +1128,21 @@ export default function NewCampaignPage() {
     
     setFormData(prev => ({
       ...prev,
-      [name]: type === "checkbox" 
-        ? (e.target as HTMLInputElement).checked
-        : name === "establishment_id" || name === "accumulation_rate" || name === "bonus_multiplier" || 
-          name === "min_purchase_amount" || name === "max_purchase_amount" || name === "total_points_limit" ||
-          name === "daily_limit_per_client" || name === "transaction_limit" || name === "campaign_limit_per_client" ||
-          name === "reward_value_mt" || name === "reward_points_cost" || name === "reward_stock" ||
-          name === "points_expiry_days" || name === "communication_budget" || name === "conversion_rate" ||
-          name === "party_points_per_vote" || name === "quiz_points_per_correct" || name === "quiz_max_attempts" ||
-          name === "quiz_time_limit_seconds" || name === "referral_min_referrals" || name === "referral_points_per_referral" ||
-          name === "referral_bonus_points" || name === "challenge_target_value" || name === "challenge_reward_points" ||
-          name === "draw_chances_per_purchase" || name === "draw_winners_count" || name === "auto_points_amount" ||
-          name === "exchange_min_points_required"
+      [name]: name === "establishment_id" || name === "accumulation_rate" || name === "bonus_multiplier" || 
+              name === "min_purchase_amount" || name === "max_purchase_amount" || name === "total_points_limit" ||
+              name === "daily_limit_per_client" || name === "transaction_limit" || name === "campaign_limit_per_client" ||
+              name === "reward_value_mt" || name === "reward_points_cost" || name === "reward_stock" ||
+              name === "points_expiry_days" || name === "communication_budget" || name === "conversion_rate" ||
+              name === "party_points_per_vote" || name === "quiz_points_per_correct" || name === "quiz_max_attempts" ||
+              name === "quiz_time_limit_seconds" || name === "referral_min_referrals" || name === "referral_points_per_referral" ||
+              name === "referral_bonus_points" || name === "challenge_target_value" || name === "challenge_reward_points" ||
+              name === "draw_chances_per_purchase" || name === "draw_winners_count" || name === "auto_points_amount" ||
+              name === "exchange_min_points_required"
         ? (value === "" ? (name === "establishment_id" ? 0 : undefined) : Number(value))
         : name === "is_active" || name === "new_customers_only" || name === "vip_only" || 
           name === "notify_push" || name === "notify_sms" || name === "notify_email" || name === "notify_whatsapp"
         ? (value === "true" || value === "1")
         : value,
-    }));
-    
-    setFormData(prev => ({
-      ...prev,
-      [name]: newValue,
     }));
   };
 
@@ -1230,6 +1190,11 @@ export default function NewCampaignPage() {
         <h1 className="text-2xl font-bold text-gray-900">Nova Campanha</h1>
       </div>
 
+      {error && (
+        <div className="mb-4 rounded-lg bg-red-50 p-4 text-red-700">
+          {error}
+        </div>
+      )}
 
       {/* Tela de seleção de tipo de campanha */}
       {showTypeSelection ? (
@@ -1322,6 +1287,46 @@ export default function NewCampaignPage() {
           
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
+              <label htmlFor="establishment_id" className="block text-sm font-medium text-gray-700 mb-2">
+                Estabelecimento <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="establishment_id"
+                name="establishment_id"
+                value={formData.establishment_id && formData.establishment_id > 0 ? String(formData.establishment_id) : ""}
+                onChange={handleChange}
+                required
+                disabled={establishments.length === 0}
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              >
+                <option value="">
+                  {establishments.length === 0 
+                    ? "Nenhum estabelecimento disponível" 
+                    : "Selecione um estabelecimento"}
+                </option>
+                {establishments.map((est) => {
+                  const hasPermission = isAdmin(user) || est.merchant_permissions?.can_create_campaigns === true;
+                  return (
+                  <option key={est.id} value={String(est.id)}>
+                    {est.name} {est.type ? `(${est.type})` : ""}
+                      {!isAdmin(user) && hasPermission && " ✓"}
+                  </option>
+                  );
+                })}
+              </select>
+              {!isAdmin(user) && establishments.length > 0 && (
+                <p className="mt-1 text-xs text-gray-500">
+                  Apenas estabelecimentos onde você tem permissão para criar campanhas são exibidos.
+                </p>
+              )}
+              {establishments.length === 0 && !isAdmin(user) && (
+                <p className="mt-1 text-xs text-red-500">
+                  Você não tem permissão para criar campanhas em nenhum estabelecimento. Entre em contato com o administrador.
+                </p>
+              )}
+            </div>
+
+            <div>
               <label htmlFor="campaign_name" className="block text-sm font-medium text-gray-700 mb-2">
                 Nome da Campanha <span className="text-red-500">*</span>
               </label>
@@ -1376,132 +1381,7 @@ export default function NewCampaignPage() {
               <p className="mt-1 text-xs text-gray-500">Total de pontos que correspondem ao valor gasto</p>
             </div>
 
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Estabelecimentos <span className="text-red-500">*</span>
-                {filteredEstablishments.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={toggleSelectAllEstablishments}
-                    className="ml-2 text-xs text-blue-600 hover:text-blue-800 underline"
-                  >
-                    {selectedEstablishments.length === filteredEstablishments.length ? "Desmarcar todos" : "Selecionar todos"}
-                  </button>
-                )}
-              </label>
-              <div className="relative" ref={establishmentDropdownRef}>
-                <div className="relative">
-                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </div>
-                  <input
-                    type="text"
-                    value={establishmentSearchTerm}
-                    onChange={(e) => {
-                      setEstablishmentSearchTerm(e.target.value);
-                      setIsEstablishmentDropdownOpen(true);
-                    }}
-                    onFocus={() => setIsEstablishmentDropdownOpen(true)}
-                    placeholder="Pesquisar estabelecimentos por nome ou tipo..."
-                    className="block w-full rounded-lg border border-gray-300 py-2 pl-10 pr-3 focus:border-blue-500 focus:ring-blue-500"
-                  />
-                  {selectedEstablishments.length > 0 && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-800">
-                        {selectedEstablishments.length} selecionado{selectedEstablishments.length !== 1 ? "s" : ""}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Dropdown de resultados com checkboxes */}
-                {isEstablishmentDropdownOpen && (
-                  <div className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-300 bg-white shadow-lg">
-                    {filteredEstablishments.length === 0 ? (
-                      <div className="px-4 py-3 text-sm text-gray-500">
-                        {establishmentSearchTerm && establishmentSearchTerm.trim() !== "" ? "Nenhum estabelecimento encontrado" : establishments.length === 0 ? "Nenhum estabelecimento disponível" : "Digite para pesquisar estabelecimentos"}
-                      </div>
-                    ) : (
-                      <>
-                        {!establishmentSearchTerm || establishmentSearchTerm.trim() === "" ? (
-                          <div className="px-4 py-2 text-xs font-semibold text-gray-500 bg-gray-50 border-b border-gray-200">
-                            {filteredEstablishments.length} estabelecimento{filteredEstablishments.length !== 1 ? "s" : ""} disponível{filteredEstablishments.length !== 1 ? "is" : ""}
-                          </div>
-                        ) : null}
-                        {filteredEstablishments.map((est) => {
-                          const establishmentId = est.id || est.establishment_id;
-                          if (!establishmentId) {
-                            console.warn("⚠️ [NEW CAMPAIGN] Estabelecimento sem ID:", est);
-                            return null;
-                          }
-                          const isSelected = selectedEstablishments.includes(establishmentId);
-                          return (
-                            <button
-                              key={establishmentId}
-                              type="button"
-                              onClick={() => toggleEstablishmentSelection(establishmentId)}
-                              className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-3 ${
-                                isSelected
-                                  ? "bg-blue-50 text-blue-900"
-                                  : "text-gray-900 hover:bg-gray-50"
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => {}}
-                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                              />
-                              <div className="flex-1">
-                                <div className="font-medium">{est.name}</div>
-                                {est.type && (
-                                  <div className="text-xs text-gray-500">{est.type}</div>
-                                )}
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-              <p className="mt-1 text-xs text-gray-500">
-                Selecione um ou mais estabelecimentos para criar a campanha.
-              </p>
-              {selectedEstablishments.length > 0 && (
-                <div className="mt-2 rounded-lg bg-blue-50 p-3">
-                  <p className="text-sm font-medium text-blue-900">
-                    {selectedEstablishments.length} estabelecimento{selectedEstablishments.length !== 1 ? "s" : ""} selecionado{selectedEstablishments.length !== 1 ? "s" : ""}
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {selectedEstablishments.map(establishmentId => {
-                      const establishment = establishments.find(e => (e.id || e.establishment_id) === establishmentId);
-                      const establishmentName = establishment?.name || `ID: ${establishmentId}`;
-                      return (
-                        <span
-                          key={establishmentId}
-                          className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800"
-                        >
-                          {establishmentName}
-                          <button
-                            type="button"
-                            onClick={() => toggleEstablishmentSelection(establishmentId)}
-                            className="text-blue-600 hover:text-blue-800"
-                          >
-                            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
+            
 
           </div>
         </div>

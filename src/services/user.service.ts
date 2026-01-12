@@ -171,37 +171,15 @@ export const userService = {
       if (page !== undefined) params.page = page;
       if (limit !== undefined) params.limit = limit;
       
-      // Usar diretamente /users que funciona conforme confirmado pelo usuário
-      const response = await api.get("/users", { params });
-      
-      console.log("🔍 [USER SERVICE] Resposta bruta da API:", response);
-      console.log("🔍 [USER SERVICE] response.data:", response.data);
-      console.log("🔍 [USER SERVICE] Tipo de response.data:", typeof response.data);
-      console.log("🔍 [USER SERVICE] response.data.keys:", response.data ? Object.keys(response.data) : "null");
-      console.log("🔍 [USER SERVICE] response.data.data:", response.data?.data);
-      console.log("🔍 [USER SERVICE] É array response.data.data?", Array.isArray(response.data?.data));
+      const response = await api.get("/users/employees", { params });
       
       // O backend retorna: { success: true, data: [...], pagination: {...}, meta: {...} }
       if (response.data?.success && response.data?.data && Array.isArray(response.data.data)) {
-        const mappedData = response.data.data.map((user: any) => {
-          const mapped = {
-            ...user,
-            // Adiciona 'name' para compatibilidade com código existente
-            name: user.fullName || `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username || "Sem nome",
-            // Garantir que userCode seja preservado (pode vir como userCode ou user_code)
-            userCode: user.userCode || user.user_code || user.code || undefined,
-            user_code: user.userCode || user.user_code || user.code || undefined,
-          };
-          console.log("🔍 [USER SERVICE] User mapeado:", { 
-            id: mapped.id, 
-            username: mapped.username, 
-            userCode: mapped.userCode, 
-            user_code: mapped.user_code,
-            originalUserCode: user.userCode,
-            originalUser_code: user.user_code
-          });
-          return mapped;
-        });
+        const mappedData = response.data.data.map((user: any) => ({
+          ...user,
+          // Adiciona 'name' para compatibilidade com código existente
+          name: user.fullName || `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username || "Sem nome",
+        }));
         
         return {
           success: response.data.success,
@@ -214,9 +192,6 @@ export const userService = {
         const mappedData = response.data.data.map((user: any) => ({
           ...user,
           name: user.fullName || `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username || "Sem nome",
-          // Garantir que userCode seja preservado
-          userCode: user.userCode || user.user_code || user.code || undefined,
-          user_code: user.userCode || user.user_code || user.code || undefined,
         }));
         
         return {
@@ -232,82 +207,10 @@ export const userService = {
           data: response.data.map((user: any) => ({
             ...user,
             name: user.fullName || `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username || "Sem nome",
-            // Garantir que userCode seja preservado
-            userCode: user.userCode || user.user_code || user.code || undefined,
-            user_code: user.userCode || user.user_code || user.code || undefined,
           })),
         };
       } else {
-        // Tentar outras estruturas possíveis
-        console.warn("⚠️ [USER SERVICE] Formato de resposta não reconhecido, tentando estruturas alternativas:", response.data);
-        
-        // Tentar response.data diretamente se for array
-        if (Array.isArray(response.data)) {
-          console.log("✅ [USER SERVICE] response.data é array direto");
-          return {
-            success: true,
-            data: response.data.map((user: any) => ({
-              ...user,
-              name: user.fullName || `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username || "Sem nome",
-              // Garantir que userCode seja preservado
-              userCode: user.userCode || user.user_code || user.code || undefined,
-              user_code: user.userCode || user.user_code || user.code || undefined,
-            })),
-          };
-        }
-        
-        // Tentar response.data.users
-        if (Array.isArray(response.data?.users)) {
-          console.log("✅ [USER SERVICE] Encontrado response.data.users");
-          return {
-            success: true,
-            data: response.data.users.map((user: any) => ({
-              ...user,
-              name: user.fullName || `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username || "Sem nome",
-              // Garantir que userCode seja preservado
-              userCode: user.userCode || user.user_code || user.code || undefined,
-              user_code: user.userCode || user.user_code || user.code || undefined,
-            })),
-            pagination: response.data.pagination,
-            meta: response.data.meta,
-          };
-        }
-        
-        // Tentar response.data.employees
-        if (Array.isArray(response.data?.employees)) {
-          console.log("✅ [USER SERVICE] Encontrado response.data.employees");
-          return {
-            success: true,
-            data: response.data.employees.map((user: any) => ({
-              ...user,
-              name: user.fullName || `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username || "Sem nome",
-              // Garantir que userCode seja preservado
-              userCode: user.userCode || user.user_code || user.code || undefined,
-              user_code: user.userCode || user.user_code || user.code || undefined,
-            })),
-            pagination: response.data.pagination,
-            meta: response.data.meta,
-          };
-        }
-        
-        // Tentar response.data.results
-        if (Array.isArray(response.data?.results)) {
-          console.log("✅ [USER SERVICE] Encontrado response.data.results");
-          return {
-            success: true,
-            data: response.data.results.map((user: any) => ({
-              ...user,
-              name: user.fullName || `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username || "Sem nome",
-              // Garantir que userCode seja preservado
-              userCode: user.userCode || user.user_code || user.code || undefined,
-              user_code: user.userCode || user.user_code || user.code || undefined,
-            })),
-            pagination: response.data.pagination,
-            meta: response.data.meta,
-          };
-        }
-        
-        console.error("❌ [USER SERVICE] Formato de resposta inesperado:", response.data);
+        console.error("Formato de resposta inesperado:", response.data);
         throw new Error("Formato de resposta inesperado do backend");
       }
     } catch (err: any) {

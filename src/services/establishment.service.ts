@@ -205,30 +205,15 @@ export const establishmentService = {
     }
   },
 
-  async getById(id: string | number): Promise<Establishment> {
+  async getById(id: number): Promise<Establishment> {
     try {
       // Validar ID antes de fazer a requisição
-      // Aceitar tanto números quanto strings (ex: EST_1768143137208_hliai)
-      if (!id) {
+      if (!id || isNaN(id) || id <= 0) {
         console.error("ID inválido para getById:", id);
         throw new Error("ID inválido para buscar estabelecimento");
       }
       
-      // Se for número, validar se é válido
-      if (typeof id === "number" && (isNaN(id) || id <= 0)) {
-        console.error("ID numérico inválido para getById:", id);
-        throw new Error("ID inválido para buscar estabelecimento");
-      }
-      
-      // Se for string, validar se não está vazia
-      if (typeof id === "string" && id.trim() === "") {
-        console.error("ID string vazio para getById:", id);
-        throw new Error("ID inválido para buscar estabelecimento");
-      }
-      
-      // Converter para string para a URL (aceita tanto números quanto strings)
-      const idString = String(id);
-      const response = await api.get(`/establishments/${idString}`);
+      const response = await api.get(`/establishments/${id}`);
       
       // O backend pode retornar os dados em diferentes formatos:
       // - Direto: {...}

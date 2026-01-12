@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
-import { dashboardService, DashboardQueryParams } from "@/services/dashboard.service";
+import { useAuth } from "@/contexts/AuthContext";
+import { isAdmin, isMerchant, isUser } from "@/utils/roleUtils";
+import { dashboardService, DashboardQueryParams, MerchantDashboardQueryParams } from "@/services/dashboard.service";
 import { DashboardData, Activity, Insight } from "@/types/dashboard";
 import {
   LineChart,
@@ -35,10 +37,17 @@ const CellWrapper = Cell as any;
 
 export default function Dashboard() {
   const router = useRouter();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [merchantDashboard, setMerchantDashboard] = useState<any>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<"7d" | "30d" | "90d">("30d");
+
+  // Determinar role do usuário
+  const userIsAdmin = user ? isAdmin(user) : false;
+  const userIsMerchant = user ? isMerchant(user) : false;
+  const userIsUser = user ? isUser(user) : false;
 
   useEffect(() => {
     // Carregar dados de forma assíncrona após a primeira renderização completa
@@ -47,20 +56,32 @@ export default function Dashboard() {
     } else {
       setTimeout(() => loadDashboard(), 50);
     }
-  }, [selectedPeriod]);
+  }, [selectedPeriod, user]);
 
   const loadDashboard = async () => {
     try {
       setLoading(true);
       setError("");
       
-      const params: DashboardQueryParams = {
-        period: selectedPeriod,
-        type: "all",
-      };
-      
-      const data = await dashboardService.getDashboard(params);
-      setDashboard(data);
+      // Merchant: usa endpoint específico do merchant
+      if (userIsMerchant) {
+        const params: MerchantDashboardQueryParams = {
+          period: selectedPeriod,
+        };
+        const data = await dashboardService.getMerchantDashboard(params);
+        setMerchantDashboard(data);
+        setDashboard(null);
+      }
+      // Admin e Cliente: usam o endpoint padrão (backend já filtra automaticamente)
+      else {
+        const params: DashboardQueryParams = {
+          period: selectedPeriod,
+          type: "all",
+        };
+        const data = await dashboardService.getDashboard(params);
+        setDashboard(data);
+        setMerchantDashboard(null);
+      }
     } catch (err: any) {
       setError(err.message || "Erro ao carregar dashboard");
       console.error("Erro ao carregar dashboard:", err);
@@ -96,29 +117,33 @@ export default function Dashboard() {
   };
 
   // Formatar data
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return "-";
     const date = new Date(dateString);
-    if (isNaN(date.getTime())) return "-";
-    const formatter = new Intl.DateTimeFormat("pt-MZ", {
+    if (isNaN(date.getTime())) {
+      console.warn("Invalid date string:", dateString);
+      return "-";
+    }
+    return new Intl.DateTimeFormat("pt-MZ", {
       day: "2-digit",
       month: "short",
-    });
-    return formatter.format(date);
+    }).format(date);
   };
 
   // Formatar data e hora
-  const formatDateTime = (dateString: string) => {
+  const formatDateTime = (dateString: string | null | undefined) => {
     if (!dateString) return "-";
     const date = new Date(dateString);
-    if (isNaN(date.getTime())) return "-";
-    const formatter = new Intl.DateTimeFormat("pt-MZ", {
+    if (isNaN(date.getTime())) {
+      console.warn("Invalid date string:", dateString);
+      return "-";
+    }
+    return new Intl.DateTimeFormat("pt-MZ", {
       day: "2-digit",
       month: "short",
       hour: "2-digit",
       minute: "2-digit",
-    });
-    return formatter.format(date);
+    }).format(date);
   };
 
   // Obter ícone de tendência
@@ -182,7 +207,10 @@ export default function Dashboard() {
     );
   }
 
-  if (!dashboard) {
+  // Verificar se há dados para mostrar
+  const hasData = dashboard || merchantDashboard;
+  
+  if (!hasData) {
     return (
       <div className="p-6">
         <p className="text-gray-500">Nenhum dado disponível</p>
@@ -190,14 +218,136 @@ export default function Dashboard() {
     );
   }
 
+  // Renderizar dashboard do merchant se for merchant
+  if (userIsMerchant && merchantDashboard) {
+    // Redirecionar para o dashboard do merchant ou mostrar uma mensagem
+    // Por enquanto, vamos mostrar os dados básicos do merchant
+    return (
+      <div className="space-y-6 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Meu Dashboard</h1>
+            <p className="mt-1 text-gray-500">
+              {merchantDashboard.summary 
+                ? `Total: ${merchantDashboard.summary.total_campaigns || 0} campanhas, ${merchantDashboard.summary.unique_customers || 0} clientes`
+                : "Visualize suas campanhas e clientes"
+              }
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">Período:</span>
+            <select
+              value={selectedPeriod}
+              onChange={(e) => setSelectedPeriod(e.target.value as "7d" | "30d" | "90d")}
+              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 hover:border-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="7d">Últimos 7 dias</option>
+              <option value="30d">Últimos 30 dias</option>
+              <option value="90d">Últimos 90 dias</option>
+            </select>
+          </div>
+        </div>
+        
+        {/* Cards de Métricas para Merchant */}
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+          {/* Total de Campanhas */}
+          <div className="rounded-lg border-l-4 border-blue-500 bg-white p-6 shadow-md">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">Total de Campanhas</p>
+                <p className="mt-2 text-3xl font-bold text-gray-900">{merchantDashboard.summary?.total_campaigns || merchantDashboard.metrics?.campaigns?.total || 0}</p>
+                <p className="mt-1 text-sm text-gray-600">
+                  {merchantDashboard.summary?.active_campaigns || merchantDashboard.metrics?.campaigns?.active || 0} ativas
+                </p>
+              </div>
+              <div className="rounded-lg bg-blue-100 p-3">
+                <svg className="h-8 w-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          {/* Clientes Únicos */}
+          <div className="rounded-lg border-l-4 border-green-500 bg-white p-6 shadow-md">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">Clientes Únicos</p>
+                <p className="mt-2 text-3xl font-bold text-gray-900">{merchantDashboard.summary?.unique_customers || merchantDashboard.metrics?.customers?.unique_customers || 0}</p>
+                <p className="mt-1 text-sm text-gray-600">
+                  {merchantDashboard.summary?.total_purchases || merchantDashboard.metrics?.purchases?.total || 0} compras
+                </p>
+              </div>
+              <div className="rounded-lg bg-green-100 p-3">
+                <svg className="h-8 w-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          {/* Receita Total */}
+          <div className="rounded-lg border-l-4 border-purple-500 bg-white p-6 shadow-md">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">Receita Total</p>
+                <p className="mt-2 text-3xl font-bold text-gray-900">{formatCurrency(merchantDashboard.summary?.total_revenue || merchantDashboard.metrics?.revenue?.total || 0)}</p>
+                <p className="mt-1 text-sm text-gray-600">
+                  Ticket médio: {formatCurrency(merchantDashboard.summary?.average_ticket || merchantDashboard.metrics?.revenue?.average_ticket || 0)}
+                </p>
+              </div>
+              <div className="rounded-lg bg-purple-100 p-3">
+                <svg className="h-8 w-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          {/* Pontos Distribuídos */}
+          <div className="rounded-lg border-l-4 border-yellow-500 bg-white p-6 shadow-md">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">Pontos Distribuídos</p>
+                <p className="mt-2 text-3xl font-bold text-gray-900">{formatPoints(merchantDashboard.summary?.total_points_given || merchantDashboard.metrics?.points?.total_given || 0)}</p>
+                <p className="mt-1 text-sm text-gray-600">
+                  {merchantDashboard.summary?.points_per_real || merchantDashboard.metrics?.points?.points_per_real || 0} pts por metical
+                </p>
+              </div>
+              <div className="rounded-lg bg-yellow-100 p-3">
+                <svg className="h-8 w-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
+          <p className="text-sm text-blue-800">
+            💡 <strong>Dica:</strong> Para ver mais detalhes sobre suas campanhas e clientes, acesse o menu "Meu Dashboard" ou "Campanhas".
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Renderizar dashboard padrão (Admin ou Cliente)
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900">
+            {userIsAdmin ? "Dashboard Administrativo" : "Meu Dashboard"}
+          </h1>
           <p className="mt-1 text-gray-500">
-            Período: {dashboard?.period?.days || 0} dias ({formatDate(dashboard?.period?.start_date || "")} - {formatDate(dashboard?.period?.end_date || "")})
+            {dashboard?.period 
+              ? `Período: ${dashboard.period.days || 0} dias (${formatDate(dashboard.period.start_date)} - ${formatDate(dashboard.period.end_date)})`
+              : userIsAdmin 
+                ? "Visão geral de todo o sistema"
+                : "Suas informações pessoais"
+            }
           </p>
         </div>
         
@@ -223,10 +373,10 @@ export default function Dashboard() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500">Pontos Disponíveis</p>
-              <p className="mt-2 text-3xl font-bold text-gray-900">{formatPoints(dashboard?.points?.current_balance || 0)}</p>
-              {dashboard?.points?.pending && dashboard.points.pending > 0 && (
+              <p className="mt-2 text-3xl font-bold text-gray-900">{formatPoints(dashboard.points?.current_balance || 0)}</p>
+              {(dashboard.points?.pending || 0) > 0 && (
                 <p className="mt-1 text-sm text-yellow-600">
-                  {formatPoints(dashboard.points.pending)} pendentes
+                  {formatPoints(dashboard.points?.pending || 0)} pendentes
                 </p>
               )}
             </div>
@@ -236,11 +386,11 @@ export default function Dashboard() {
               </svg>
             </div>
           </div>
-          {dashboard?.trends?.points && (
+          {dashboard.trends?.points && (
             <div className="mt-4 flex items-center">
-              {getTrendIcon(dashboard.trends.points.trend)}
-              <span className={`ml-2 text-sm font-medium ${dashboard.trends.points.trend === "up" ? "text-green-600" : dashboard.trends.points.trend === "down" ? "text-red-600" : "text-gray-600"}`}>
-                {dashboard.trends.points.percentage > 0 ? "+" : ""}{dashboard.trends.points.percentage.toFixed(1)}%
+              {getTrendIcon(dashboard.trends.points?.trend || "stable")}
+              <span className={`ml-2 text-sm font-medium ${dashboard.trends.points?.trend === "up" ? "text-green-600" : dashboard.trends.points?.trend === "down" ? "text-red-600" : "text-gray-600"}`}>
+                {(dashboard.trends.points?.percentage || 0) > 0 ? "+" : ""}{(dashboard.trends.points?.percentage || 0).toFixed(1)}%
               </span>
               <span className="ml-2 text-xs text-gray-500">vs período anterior</span>
             </div>
@@ -252,9 +402,9 @@ export default function Dashboard() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500">Total de Compras</p>
-              <p className="mt-2 text-3xl font-bold text-gray-900">{dashboard?.purchases?.total_count || 0}</p>
+              <p className="mt-2 text-3xl font-bold text-gray-900">{dashboard.purchases?.total_count || 0}</p>
               <p className="mt-1 text-sm text-gray-600">
-                {formatCurrency(dashboard?.purchases?.total_amount || 0)} gastos
+                {formatCurrency(dashboard.purchases?.total_amount || 0)} gastos
               </p>
             </div>
             <div className="rounded-lg bg-green-100 p-3">
@@ -263,11 +413,11 @@ export default function Dashboard() {
               </svg>
             </div>
           </div>
-          {dashboard?.trends?.purchases && (
+          {dashboard.trends?.purchases && (
             <div className="mt-4 flex items-center">
-              {getTrendIcon(dashboard.trends.purchases.trend)}
-              <span className={`ml-2 text-sm font-medium ${dashboard.trends.purchases.trend === "up" ? "text-green-600" : dashboard.trends.purchases.trend === "down" ? "text-red-600" : "text-gray-600"}`}>
-                {dashboard.trends.purchases.percentage > 0 ? "+" : ""}{dashboard.trends.purchases.percentage.toFixed(1)}%
+              {getTrendIcon(dashboard.trends.purchases?.trend || "stable")}
+              <span className={`ml-2 text-sm font-medium ${dashboard.trends.purchases?.trend === "up" ? "text-green-600" : dashboard.trends.purchases?.trend === "down" ? "text-red-600" : "text-gray-600"}`}>
+                {(dashboard.trends.purchases?.percentage || 0) > 0 ? "+" : ""}{(dashboard.trends.purchases?.percentage || 0).toFixed(1)}%
               </span>
               <span className="ml-2 text-xs text-gray-500">vs período anterior</span>
             </div>
@@ -279,9 +429,9 @@ export default function Dashboard() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500">Transferências</p>
-              <p className="mt-2 text-3xl font-bold text-gray-900">{dashboard?.transfers?.total_count || 0}</p>
+              <p className="mt-2 text-3xl font-bold text-gray-900">{dashboard.transfers?.total_count || 0}</p>
               <p className="mt-1 text-sm text-gray-600">
-                {formatPoints(Math.abs(dashboard?.transfers?.net_points || 0))} {(dashboard?.transfers?.net_points || 0) >= 0 ? "recebidos" : "enviados"}
+                {formatPoints(Math.abs(dashboard.transfers?.net_points || 0))} {(dashboard.transfers?.net_points || 0) >= 0 ? "recebidos" : "enviados"}
               </p>
             </div>
             <div className="rounded-lg bg-purple-100 p-3">
@@ -297,10 +447,10 @@ export default function Dashboard() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500">Amigos</p>
-              <p className="mt-2 text-3xl font-bold text-gray-900">{dashboard?.friends?.total || 0}</p>
-              {dashboard?.friends?.new_in_period && dashboard.friends.new_in_period > 0 && (
+              <p className="mt-2 text-3xl font-bold text-gray-900">{dashboard.friends?.total || 0}</p>
+              {(dashboard.friends?.new_in_period || 0) > 0 && (
                 <p className="mt-1 text-sm text-green-600">
-                  +{dashboard.friends.new_in_period} novos no período
+                  +{dashboard.friends?.new_in_period || 0} novos no período
                 </p>
               )}
             </div>
@@ -318,7 +468,7 @@ export default function Dashboard() {
         {/* Timeline de Pontos */}
         <div className="rounded-lg bg-white p-6 shadow-md">
           <h2 className="mb-4 text-xl font-semibold text-gray-900">Evolução de Pontos</h2>
-          {dashboard?.charts?.points_timeline && dashboard.charts.points_timeline.length > 0 ? (
+          {dashboard.charts?.points_timeline && dashboard.charts.points_timeline.length > 0 ? (
             <ResponsiveContainerWrapper width="100%" height={300}>
               <LineChartWrapper data={dashboard.charts.points_timeline as any}>
                 <CartesianGridWrapper strokeDasharray="3 3" />
@@ -369,7 +519,7 @@ export default function Dashboard() {
         {/* Timeline de Compras */}
         <div className="rounded-lg bg-white p-6 shadow-md">
           <h2 className="mb-4 text-xl font-semibold text-gray-900">Evolução de Compras</h2>
-          {dashboard?.charts?.purchases_timeline && dashboard.charts.purchases_timeline.length > 0 ? (
+          {dashboard.charts?.purchases_timeline && dashboard.charts.purchases_timeline.length > 0 ? (
             <ResponsiveContainerWrapper width="100%" height={300}>
               <BarChartWrapper data={dashboard.charts.purchases_timeline as any}>
                 <CartesianGridWrapper strokeDasharray="3 3" />
@@ -405,7 +555,7 @@ export default function Dashboard() {
         {/* Distribuição de Compras por Status */}
         <div className="rounded-lg bg-white p-6 shadow-md">
           <h2 className="mb-4 text-xl font-semibold text-gray-900">Compras por Status</h2>
-          {dashboard?.charts?.purchases_by_status && dashboard.charts.purchases_by_status.length > 0 ? (
+          {dashboard.charts?.purchases_by_status && dashboard.charts.purchases_by_status.length > 0 ? (
             <ResponsiveContainerWrapper width="100%" height={300}>
               <PieChartWrapper>
                 <PieWrapper
@@ -435,7 +585,7 @@ export default function Dashboard() {
         {/* Top Estabelecimentos */}
         <div className="rounded-lg bg-white p-6 shadow-md">
           <h2 className="mb-4 text-xl font-semibold text-gray-900">Top Estabelecimentos</h2>
-          {dashboard?.charts?.purchases_by_establishment && dashboard.charts.purchases_by_establishment.length > 0 ? (
+          {dashboard.charts?.purchases_by_establishment && dashboard.charts.purchases_by_establishment.length > 0 ? (
             <ResponsiveContainerWrapper width="100%" height={300}>
               <BarChartWrapper data={dashboard.charts.purchases_by_establishment as any} layout="vertical">
                 <CartesianGridWrapper strokeDasharray="3 3" />
@@ -462,7 +612,7 @@ export default function Dashboard() {
       </div>
 
       {/* Insights e Tendências */}
-      {dashboard?.trends?.insights && dashboard.trends.insights.length > 0 && (
+      {dashboard.trends?.insights && dashboard.trends.insights.length > 0 && (
         <div className="rounded-lg bg-white p-6 shadow-md">
           <h2 className="mb-4 text-xl font-semibold text-gray-900">Insights e Tendências</h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -575,23 +725,23 @@ export default function Dashboard() {
           <div className="space-y-4">
             <div className="flex items-center justify-between border-b border-gray-200 py-2">
               <span className="text-gray-600">Ganhos no Período</span>
-              <span className="font-semibold text-green-600">{formatPoints(dashboard?.points?.period?.earned || 0)}</span>
+              <span className="font-semibold text-green-600">{formatPoints(dashboard.points?.period?.earned || 0)}</span>
             </div>
             <div className="flex items-center justify-between border-b border-gray-200 py-2">
               <span className="text-gray-600">Gastos no Período</span>
-              <span className="font-semibold text-red-600">{formatPoints(dashboard?.points?.period?.spent || 0)}</span>
+              <span className="font-semibold text-red-600">{formatPoints(dashboard.points?.period?.spent || 0)}</span>
             </div>
             <div className="flex items-center justify-between border-b border-gray-200 py-2">
               <span className="text-gray-600">Líquido no Período</span>
-              <span className="font-semibold text-blue-600">{formatPoints(dashboard?.points?.period?.net || 0)}</span>
+              <span className="font-semibold text-blue-600">{formatPoints(dashboard.points?.period?.net || 0)}</span>
             </div>
             <div className="flex items-center justify-between border-b border-gray-200 py-2">
               <span className="text-gray-600">Total de Transações</span>
-              <span className="font-semibold text-gray-900">{dashboard?.points?.period?.transactions || 0}</span>
+              <span className="font-semibold text-gray-900">{dashboard.points?.period?.transactions || 0}</span>
             </div>
             <div className="flex items-center justify-between py-2">
               <span className="text-gray-600">Saldo Disponível</span>
-              <span className="text-lg font-semibold text-gray-900">{formatPoints(dashboard?.points?.current_balance || 0)}</span>
+              <span className="text-lg font-semibold text-gray-900">{formatPoints(dashboard.points?.current_balance || 0)}</span>
             </div>
           </div>
         </div>
@@ -602,37 +752,37 @@ export default function Dashboard() {
           <div className="space-y-4">
             <div className="flex items-center justify-between border-b border-gray-200 py-2">
               <span className="text-gray-600">Confirmadas</span>
-              <span className="font-semibold text-green-600">{dashboard?.purchases?.confirmed_count || 0}</span>
+              <span className="font-semibold text-green-600">{dashboard.purchases?.confirmed_count || 0}</span>
             </div>
             <div className="flex items-center justify-between border-b border-gray-200 py-2">
               <span className="text-gray-600">Pendentes</span>
-              <span className="font-semibold text-yellow-600">{dashboard?.purchases?.pending_count || 0}</span>
+              <span className="font-semibold text-yellow-600">{dashboard.purchases?.pending_count || 0}</span>
             </div>
             <div className="flex items-center justify-between border-b border-gray-200 py-2">
               <span className="text-gray-600">Rejeitadas</span>
-              <span className="font-semibold text-red-600">{dashboard?.purchases?.rejected_count || 0}</span>
+              <span className="font-semibold text-red-600">{dashboard.purchases?.rejected_count || 0}</span>
             </div>
             <div className="flex items-center justify-between border-b border-gray-200 py-2">
               <span className="text-gray-600">Valor Total Confirmado</span>
-              <span className="font-semibold text-gray-900">{formatCurrency(dashboard?.purchases?.confirmed_amount || 0)}</span>
+              <span className="font-semibold text-gray-900">{formatCurrency(dashboard.purchases?.confirmed_amount || 0)}</span>
             </div>
             <div className="flex items-center justify-between border-b border-gray-200 py-2">
               <span className="text-gray-600">Pontos Ganhos</span>
-              <span className="font-semibold text-blue-600">{formatPoints(dashboard?.purchases?.confirmed_points_earned || 0)}</span>
+              <span className="font-semibold text-blue-600">{formatPoints(dashboard.purchases?.confirmed_points_earned || 0)}</span>
             </div>
             <div className="flex items-center justify-between py-2">
               <span className="text-gray-600">Média por Compra</span>
-              <span className="font-semibold text-gray-900">{formatCurrency(dashboard?.purchases?.avg_amount || 0)}</span>
+              <span className="font-semibold text-gray-900">{formatCurrency(dashboard.purchases?.avg_amount || 0)}</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Top Rankings */}
-      {((dashboard?.purchases?.top_establishments?.length || 0) > 0 || (dashboard?.transfers?.top_friends?.length || 0) > 0) && (
+      {((dashboard.purchases?.top_establishments?.length || 0) > 0 || (dashboard.transfers?.top_friends?.length || 0) > 0) && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Top Estabelecimentos */}
-          {dashboard?.purchases?.top_establishments && dashboard.purchases.top_establishments.length > 0 && (
+          {dashboard.purchases?.top_establishments && dashboard.purchases.top_establishments.length > 0 && (
             <div className="rounded-lg bg-white p-6 shadow-md">
               <h2 className="mb-4 text-xl font-semibold text-gray-900">Estabelecimentos Mais Visitados</h2>
               <div className="space-y-3">
@@ -658,7 +808,7 @@ export default function Dashboard() {
           )}
 
           {/* Top Amigos */}
-          {dashboard?.transfers?.top_friends && dashboard.transfers.top_friends.length > 0 && (
+          {dashboard.transfers?.top_friends && dashboard.transfers.top_friends.length > 0 && (
             <div className="rounded-lg bg-white p-6 shadow-md">
               <h2 className="mb-4 text-xl font-semibold text-gray-900">Amigos Mais Ativos</h2>
               <div className="space-y-3">

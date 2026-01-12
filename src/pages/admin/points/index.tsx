@@ -2,19 +2,11 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { pointsService, PointsPurchase, PointsSale, PointsAssignment, ListPointsPurchasesParams, ListPointsSalesParams, ListAssignmentsParams } from "@/services/points.service";
 import { AlertModal } from "@/components/modals/AlertModal";
-import { useAuth } from "@/contexts/AuthContext";
-import { isAdmin, isMerchant, isUser } from "@/utils/roleUtils";
 
 const ITEMS_PER_PAGE = 10;
 
 export default function PointsPage() {
   const router = useRouter();
-  const { user } = useAuth();
-  const userIsAdmin = isAdmin(user);
-  const userIsMerchant = isMerchant(user);
-  const userIsUser = isUser(user);
-  
-  // Clientes só podem ver "purchases", admin e merchant podem ver todos
   const [activeTab, setActiveTab] = useState<"purchases" | "sales" | "assignments">("purchases");
   const [purchases, setPurchases] = useState<PointsPurchase[]>([]);
   const [sales, setSales] = useState<PointsSale[]>([]);
@@ -25,13 +17,6 @@ export default function PointsPage() {
   const [pagination, setPagination] = useState<any>(null);
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [alertConfig, setAlertConfig] = useState<{ title: string; message: string; type: "success" | "error" | "warning" | "info" } | null>(null);
-  
-  // Se for cliente, garantir que só veja "purchases"
-  useEffect(() => {
-    if (userIsUser && activeTab !== "purchases") {
-      setActiveTab("purchases");
-    }
-  }, [userIsUser, activeTab]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "requestIdleCallback" in window) {
@@ -51,85 +36,31 @@ export default function PointsPage() {
           page: currentPage,
           limit: ITEMS_PER_PAGE,
         };
-        try {
-          const response = await pointsService.listPurchases(params);
-          setPurchases(response.data || []);
-          setPagination(response.pagination);
-        } catch (err: any) {
-          // Se houver erro (500, 404, etc.), definir array vazio e não mostrar erro técnico
-          setPurchases([]);
-          setPagination(null);
-          // Apenas logar erro no console para debug (não mostrar para usuário)
-          const is500 = err?.response?.status === 500;
-          const is404 = err?.response?.status === 404;
-          if (!is500 && !is404) {
-            // Só logar se não for erro comum do backend
-            console.error("Erro ao carregar purchases:", err);
-          }
-        }
+        const response = await pointsService.listPurchases(params);
+        setPurchases(response.data || []);
+        setPagination(response.pagination);
       } else if (activeTab === "sales") {
-        // Apenas admin e merchant podem ver sales
-        if (userIsAdmin || userIsMerchant) {
-          const params: ListPointsSalesParams = {
-            page: currentPage,
-            limit: ITEMS_PER_PAGE,
-          };
-          try {
-            const response = await pointsService.listSales(params);
-            setSales(response.data || []);
-            setPagination(response.pagination);
-          } catch (err: any) {
-            // Se o endpoint não existir, apenas definir array vazio
-            if (err?.response?.status === 404) {
-              setSales([]);
-              setPagination(null);
-            } else {
-              throw err;
-            }
-          }
-        }
+        const params: ListPointsSalesParams = {
+          page: currentPage,
+          limit: ITEMS_PER_PAGE,
+        };
+        const response = await pointsService.listSales(params);
+        setSales(response.data || []);
+        setPagination(response.pagination);
       } else if (activeTab === "assignments") {
-        // Apenas admin e merchant podem ver assignments
-        if (userIsAdmin || userIsMerchant) {
-          const params: ListAssignmentsParams = {
-            page: currentPage,
-            limit: ITEMS_PER_PAGE,
-          };
-          try {
-            const response = await pointsService.listAssignments(params);
-            setAssignments(response.data || []);
-            setPagination(response.pagination);
-          } catch (err: any) {
-            // Se o endpoint não existir, apenas definir array vazio
-            if (err?.response?.status === 404) {
-              setAssignments([]);
-              setPagination(null);
-            } else {
-              throw err;
-            }
-          }
-        }
+        const params: ListAssignmentsParams = {
+          page: currentPage,
+          limit: ITEMS_PER_PAGE,
+        };
+        const response = await pointsService.listAssignments(params);
+        setAssignments(response.data || []);
+        setPagination(response.pagination);
       }
     } catch (err: any) {
       console.error(`Erro ao carregar ${activeTab}:`, err);
       const isNetworkError = err.isNetworkError || err.message?.includes("Servidor não disponível");
-      const is404 = err?.response?.status === 404;
-      const is500 = err?.response?.status === 500;
-      
-      // Não mostrar erro para o usuário - apenas definir arrays vazios
-      // A página mostrará mensagem amigável de "nenhum dado disponível"
-      if (activeTab === "purchases") {
-        setPurchases([]);
-      } else if (activeTab === "sales") {
-        setSales([]);
-      } else if (activeTab === "assignments") {
-        setAssignments([]);
-      }
-      setPagination(null);
-      
-      // Apenas logar erro no console para debug (não mostrar para usuário)
-      if (!isNetworkError && !is404 && !is500) {
-        console.error(`Erro ao carregar ${activeTab}:`, err);
+      if (!isNetworkError) {
+        setError(err.message || `Erro ao carregar ${activeTab}`);
       }
     } finally {
       setLoading(false);
@@ -263,31 +194,32 @@ export default function PointsPage() {
         <h1 className="text-2xl font-bold text-gray-900">Gerenciamento de Pontos</h1>
       </div>
 
-      {/* Abas - Apenas admin e merchant veem abas, Clientes veem tabela diretamente */}
-      {(userIsAdmin || userIsMerchant) && (
-        <div className="mb-4 flex gap-4 border-b">
-          <button
-            onClick={() => { setActiveTab("purchases"); setCurrentPage(1); }}
-            className={`px-4 py-2 ${activeTab === "purchases" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-600"}`}
-          >
-            Compras
-          </button>
-          <button
-            onClick={() => { setActiveTab("sales"); setCurrentPage(1); }}
-            className={`px-4 py-2 ${activeTab === "sales" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-600"}`}
-          >
-            Vendas
-          </button>
-          <button
-            onClick={() => { setActiveTab("assignments"); setCurrentPage(1); }}
-            className={`px-4 py-2 ${activeTab === "assignments" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-600"}`}
-          >
-            Atribuições
-          </button>
+      <div className="mb-4 flex gap-4 border-b">
+        <button
+          onClick={() => { setActiveTab("purchases"); setCurrentPage(1); }}
+          className={`px-4 py-2 ${activeTab === "purchases" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-600"}`}
+        >
+          Compras
+        </button>
+        <button
+          onClick={() => { setActiveTab("sales"); setCurrentPage(1); }}
+          className={`px-4 py-2 ${activeTab === "sales" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-600"}`}
+        >
+          Vendas
+        </button>
+        <button
+          onClick={() => { setActiveTab("assignments"); setCurrentPage(1); }}
+          className={`px-4 py-2 ${activeTab === "assignments" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-600"}`}
+        >
+          Atribuições
+        </button>
+      </div>
+
+      {error && (
+        <div className="mb-4 rounded-lg bg-red-50 p-4 text-red-700">
+          {error}
         </div>
       )}
-
-      {/* Não mostrar erros técnicos - apenas mostrar mensagem de "nenhum dado" na tabela */}
 
       {/* Tabela de Pontos */}
       <div className="overflow-hidden rounded-lg bg-white shadow">

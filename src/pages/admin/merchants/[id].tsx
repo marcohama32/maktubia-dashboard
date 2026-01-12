@@ -355,6 +355,92 @@ export default function MerchantDetailsPage() {
             </div>
           )}
 
+          {/* Permissões */}
+          <div className="mb-6 border-t border-gray-200 pt-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900">Permissões</h2>
+              <div className="flex gap-2">
+                {canCreateCampaigns ? (
+                  <button
+                    onClick={() => handleAction("revokeCampaign")}
+                    disabled={actionLoading}
+                    className="rounded-lg bg-red-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                  >
+                    Revogar Campanhas
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleAction("grantCampaign")}
+                    disabled={actionLoading}
+                    className="rounded-lg bg-green-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+                  >
+                    Conceder Campanhas
+                  </button>
+                )}
+                {canSetCustomPoints ? (
+                  <button
+                    onClick={() => handleAction("revokeCustomPoints")}
+                    disabled={actionLoading}
+                    className="rounded-lg bg-red-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                  >
+                    Revogar Pontos
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleAction("grantCustomPoints")}
+                    disabled={actionLoading}
+                    className="rounded-lg bg-green-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+                  >
+                    Conceder Pontos
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4">
+                <div className="flex items-center gap-3">
+                  {canCreateCampaigns ? (
+                    <svg className="h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  )}
+                  <span className="font-medium text-gray-900">Pode criar campanhas</span>
+                </div>
+                <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                  canCreateCampaigns
+                    ? "bg-green-100 text-green-800"
+                    : "bg-gray-100 text-gray-800"
+                }`}>
+                  {canCreateCampaigns ? "Sim" : "Não"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4">
+                <div className="flex items-center gap-3">
+                  {canSetCustomPoints ? (
+                    <svg className="h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  )}
+                  <span className="font-medium text-gray-900">Pode definir pontos personalizados</span>
+                </div>
+                <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                  canSetCustomPoints
+                    ? "bg-green-100 text-green-800"
+                    : "bg-gray-100 text-gray-800"
+                }`}>
+                  {canSetCustomPoints ? "Sim" : "Não"}
+                </span>
+              </div>
+            </div>
+          </div>
 
           {/* Ações */}
           <div className="mb-6 border-t border-gray-200 pt-6">

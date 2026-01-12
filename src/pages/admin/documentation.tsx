@@ -2,7 +2,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Head from "next/head";
 import { useAuth } from "@/contexts/AuthContext";
-import { isAdmin, isMerchant, isUser } from "@/utils/roleUtils";
+import { isAdmin, isMerchant } from "@/utils/roleUtils";
 
 export default function DocumentationPage() {
   const { user } = useAuth();
@@ -10,7 +10,6 @@ export default function DocumentationPage() {
   
   const userIsAdmin = isAdmin(user);
   const userIsMerchant = isMerchant(user);
-  const userIsUser = isUser(user); // Cliente (role user/cliente/customer)
 
   const toggleSection = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section);
@@ -62,12 +61,6 @@ export default function DocumentationPage() {
             <p className="mt-1 text-sm text-green-800">Você tem acesso às funcionalidades específicas para merchants, incluindo gestão de campanhas e visualização de dados dos seus estabelecimentos.</p>
           </div>
         )}
-        {userIsUser && (
-          <div className="mt-4 rounded border-l-4 border-purple-500 bg-purple-50 p-4">
-            <p className="font-semibold text-purple-900">👤 Você está acessando como <strong>Cliente</strong></p>
-            <p className="mt-1 text-sm text-purple-800">Você tem acesso limitado ao sistema. Este guia mostra apenas as funcionalidades disponíveis para clientes.</p>
-          </div>
-        )}
       </div>
 
       {/* Índice */}
@@ -76,15 +69,7 @@ export default function DocumentationPage() {
         <ul className="space-y-2 text-gray-700">
           <li><a href="#inicio-rapido" className="text-blue-600 hover:underline">1. Início Rápido</a></li>
           <li><a href="#login" className="text-blue-600 hover:underline">2. Login e Autenticação</a></li>
-          {userIsUser ? (
-            <>
-              <li><a href="#dashboard-cliente" className="text-blue-600 hover:underline">3. Meu Dashboard</a></li>
-              <li><a href="#pontos-cliente" className="text-blue-600 hover:underline">4. Meus Pontos</a></li>
-              <li><a href="#compras-cliente" className="text-blue-600 hover:underline">5. Minhas Compras</a></li>
-              <li><a href="#resgates-cliente" className="text-blue-600 hover:underline">6. Meus Resgates</a></li>
-              <li><a href="#transferencias-cliente" className="text-blue-600 hover:underline">7. Transferências</a></li>
-            </>
-          ) : userIsMerchant ? (
+          {userIsMerchant ? (
             <>
               <li><a href="#dashboard-merchant" className="text-blue-600 hover:underline">3. Meu Dashboard</a></li>
               <li><a href="#campanhas" className="text-blue-600 hover:underline">4. Gerenciar Campanhas</a></li>
@@ -199,7 +184,7 @@ export default function DocumentationPage() {
       </div>
 
       {/* Seção 3: Dashboard - Admin */}
-      {userIsAdmin && (
+      {!userIsMerchant && (
       <div id="dashboard" className="rounded-lg bg-white p-6 shadow-md">
         <h2 
           className="mb-4 flex cursor-pointer items-center justify-between text-2xl font-bold text-gray-900"
@@ -395,8 +380,7 @@ export default function DocumentationPage() {
       </div>
       )}
 
-      {/* Seção 5: Usuários - Apenas Admin */}
-      {userIsAdmin && (
+      {/* Seção 5: Usuários */}
       <div id="usuarios" className="rounded-lg bg-white p-6 shadow-md">
         <h2 
           className="mb-4 flex cursor-pointer items-center justify-between text-2xl font-bold text-gray-900"

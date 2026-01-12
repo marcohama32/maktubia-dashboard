@@ -57,40 +57,41 @@ function CampaignsPageContent() {
       
       // Se for admin, carregar todos os estabelecimentos
       if (isAdmin(user)) {
+        console.log("🔍 [CAMPAIGNS LIST] Usuário é admin - carregando todos os estabelecimentos");
         establishmentsData = await establishmentService.getAll(true);
       } 
       // Se for merchant, carregar apenas estabelecimentos do merchant
       else if (isMerchant(user)) {
+        console.log("🔍 [CAMPAIGNS LIST] Usuário é merchant - carregando estabelecimentos do merchant");
         const response = await merchantsService.getMyEstablishments();
         establishmentsData = response.data || [];
       } 
       // Se não tiver role definido, tentar carregar como merchant primeiro
       else {
+        console.log("🔍 [CAMPAIGNS LIST] Role não definido - tentando carregar como merchant");
         try {
           const response = await merchantsService.getMyEstablishments();
           establishmentsData = response.data || [];
         } catch (merchantErr) {
           // Se falhar, tentar como admin
+          console.log("🔍 [CAMPAIGNS LIST] Falhou como merchant - tentando como admin");
           establishmentsData = await establishmentService.getAll(true);
         }
       }
       
+      console.log("✅ [CAMPAIGNS LIST] Estabelecimentos carregados:", establishmentsData.length);
       setEstablishments(establishmentsData);
     } catch (err: any) {
-      // Não mostrar erro - apenas definir array vazio
-      // A página funcionará normalmente sem estabelecimentos
-      setEstablishments([]);
+      console.error("❌ [CAMPAIGNS LIST] Erro ao carregar estabelecimentos:", err);
+      // Não bloquear se falhar ao carregar estabelecimentos
     } finally {
       setLoadingEstablishments(false);
     }
   };
 
-  // Carregar campanhas após estabelecimentos (ou mesmo se estabelecimentos falharem)
+  // Carregar campanhas após estabelecimentos
   useEffect(() => {
-    // Carregar campanhas se:
-    // 1. Estabelecimentos foram carregados (com sucesso ou vazio), OU
-    // 2. O carregamento de estabelecimentos terminou (mesmo que tenha falhado)
-    if (!loadingEstablishments) {
+    if (establishments.length > 0 || !loadingEstablishments) {
       if (typeof window !== "undefined" && "requestIdleCallback" in window) {
         (window as any).requestIdleCallback(() => loadCampaigns(), { timeout: 100 });
       } else {
@@ -171,13 +172,12 @@ function CampaignsPageContent() {
         }
       }
       
-      // O service já retorna { success, data, pagination, generalMetrics }
-      let campaignsData: Campaign[] = response.data || [];
+      let campaignsData = response.data || [];
       
-      // Enriquecer campanhas com dados de estabelecimentos (se disponíveis)
+      // Enriquecer campanhas com dados de estabelecimentos
       campaignsData = campaignsData.map((campaign: Campaign) => {
         // Se não tem establishment no objeto, buscar pelo establishment_id
-        if (!campaign.establishment && campaign.establishment_id && establishments.length > 0) {
+        if (!campaign.establishment && campaign.establishment_id) {
           const establishment = establishments.find(e => e.id === campaign.establishment_id);
           if (establishment) {
             return {
@@ -195,7 +195,7 @@ function CampaignsPageContent() {
       });
       
       setCampaigns(campaignsData);
-      setPagination(response.pagination || null);
+      setPagination(response.pagination);
       setGeneralMetrics(response.generalMetrics || null);
     } catch (err: any) {
       console.error("Erro ao carregar campanhas:", err);
@@ -496,18 +496,8 @@ function CampaignsPageContent() {
           <tbody className="bg-white divide-y divide-gray-200">
             {campaigns.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-4 text-center">
-                  <div className="flex flex-col items-center justify-center py-8">
-                    <svg className="h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <p className="text-gray-500 font-medium">Nenhuma campanha encontrada</p>
-                    <p className="text-gray-400 text-sm mt-1">
-                      {statusFilter || establishmentFilter || typeFilter || searchTerm
-                        ? "Tente ajustar os filtros para ver mais resultados"
-                        : "Crie uma nova campanha para começar"}
-                    </p>
-                  </div>
+                <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
+                  Nenhuma campanha encontrada
                 </td>
               </tr>
             ) : (

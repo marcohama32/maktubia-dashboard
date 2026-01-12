@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { discountReservationCampaignsService, CreateDiscountReservationCampaignDTO } from "@/services/discountReservationCampaigns.service";
 import { establishmentService } from "@/services/establishment.service";
-import AlertModal from "@/components/modals/AlertModal";
+import { AlertModal } from "@/components/modals/AlertModal";
 
 export default function NewDiscountReservationCampaignPage() {
   const router = useRouter();

@@ -289,13 +289,6 @@ export default function BCIDashboard() {
               >
                 Upload CSV
               </Link>
-              <Link
-                href="/admin/bci/settings"
-                className="px-5 py-2.5 rounded-xl font-semibold transition-all duration-200 shadow-sm hover:shadow-md border-2"
-                style={{ borderColor: BCI_COLORS.accent, color: BCI_COLORS.dark, backgroundColor: `${BCI_COLORS.accent}10` }}
-              >
-                ⚙️ Configurações
-              </Link>
             </div>
           </div>
 

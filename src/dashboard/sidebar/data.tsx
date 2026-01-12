@@ -86,6 +86,11 @@ export const sidebarItems: SidebarItem[] = [
     link: "/admin/establishments",
   },
   {
+    title: "BCI",
+    icon: "PurchaseIcon",
+    link: "/admin/bci",
+  },
+  {
     title: "Compras",
     icon: "PurchaseIcon",
     link: "/admin/purchases",

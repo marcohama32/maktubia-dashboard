@@ -64,6 +64,11 @@ export const sidebarItems: SidebarItem[] = [
     link: "#",
     children: [
       {
+        title: "Meus Pontos",
+        icon: "PointsIcon",
+        link: "/client/points",
+      },
+      {
         title: "Gestão Pontos",
         icon: "PointsManagementIcon",
         link: "/admin/points",

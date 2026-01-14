@@ -24,7 +24,7 @@ export default function NewMerchantPage() {
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const userDropdownRef = useRef<HTMLDivElement>(null);
 
-  const [formData, setFormData] = useState<CreateMerchantDTO>({
+  const [formData, setFormData] = useState<CreateMerchantDTO & { establishment_id: number | string }>({
     user_id: 0,
     establishment_id: 0,
     can_create_campaigns: false,
@@ -50,14 +50,24 @@ export default function NewMerchantPage() {
     }
   }, [user]);
 
+  // Estado para controlar se o campo de estabelecimento está desabilitado
+  const [isEstablishmentDisabled, setIsEstablishmentDisabled] = useState(false);
+
   // Verificar se há establishment_id na query para pré-selecionar
   useEffect(() => {
     const { establishment_id } = router.query;
-    if (establishment_id && !isNaN(Number(establishment_id))) {
+    if (establishment_id) {
+      // Aceitar tanto números quanto strings alfanuméricas
+      const estId = typeof establishment_id === 'string' ? establishment_id : String(establishment_id);
       setFormData(prev => ({
         ...prev,
-        establishment_id: Number(establishment_id),
+        establishment_id: estId,
       }));
+      // Desabilitar o campo quando há establishment_id na query (adicionar merchant a estabelecimento existente)
+      setIsEstablishmentDisabled(true);
+    } else {
+      // Habilitar o campo quando não há establishment_id (criar novo merchant)
+      setIsEstablishmentDisabled(false);
     }
   }, [router.query]);
 
@@ -95,6 +105,15 @@ export default function NewMerchantPage() {
       setLoading(true);
       setError("");
       const data = await establishmentService.getAll(true);
+      console.log("📋 [NEW MERCHANT] Estabelecimentos carregados:", data?.length || 0);
+      if (data && data.length > 0) {
+        console.log("📋 [NEW MERCHANT] Primeiros 3 estabelecimentos:", data.slice(0, 3).map((e: any) => ({
+          id: e.id,
+          establishment_id: e.establishment_id,
+          est_id: e.est_id,
+          name: e.name
+        })));
+      }
       setEstablishments(data || []);
     } catch (err: any) {
       console.error("Erro ao carregar estabelecimentos:", err);
@@ -111,7 +130,7 @@ export default function NewMerchantPage() {
     e.preventDefault();
     
     // Validação: establishment_id obrigatório
-    if (!formData.establishment_id || formData.establishment_id === 0) {
+    if (!formData.establishment_id || formData.establishment_id === 0 || formData.establishment_id === "") {
       setAlertConfig({
         title: "Erro!",
         message: "Por favor, selecione um estabelecimento.",
@@ -170,13 +189,20 @@ export default function NewMerchantPage() {
       setError("");
       
       // Preparar dados para envio - apenas campos válidos
+      // Converter establishment_id para número se for possível, senão manter como string
+      const establishmentId = typeof formData.establishment_id === 'string' && !isNaN(Number(formData.establishment_id))
+        ? Number(formData.establishment_id)
+        : formData.establishment_id;
+      
       const merchantData: CreateMerchantDTO = {
         user_id: formData.user_id,
-        establishment_id: formData.establishment_id,
+        establishment_id: establishmentId as any, // Backend aceita string ou número
         can_create_campaigns: formData.can_create_campaigns || false,
         can_set_custom_points: formData.can_set_custom_points || false,
         is_active: formData.is_active !== undefined ? formData.is_active : true,
       };
+      
+      console.log("📤 [NEW MERCHANT] Dados preparados:", merchantData);
 
       console.log("📤 [NEW MERCHANT] Enviando dados:", merchantData);
       const createdMerchant = await merchantsService.create(merchantData);
@@ -330,8 +356,10 @@ export default function NewMerchantPage() {
       ...prev,
       [name]: type === "checkbox" 
         ? (e.target as HTMLInputElement).checked
-        : name === "user_id" || name === "establishment_id"
+        : name === "user_id"
         ? (value === "" ? 0 : Number(value))
+        : name === "establishment_id"
+        ? (value === "" ? 0 : value) // Aceitar string ou número para establishment_id
         : value,
     }));
   };
@@ -676,21 +704,68 @@ export default function NewMerchantPage() {
               <label htmlFor="establishment_id" className="block text-sm font-medium text-gray-700 mb-2">
                 Estabelecimento <span className="text-red-500">*</span>
               </label>
-              <select
-                id="establishment_id"
-                name="establishment_id"
-                value={formData.establishment_id && formData.establishment_id > 0 ? String(formData.establishment_id) : ""}
-                onChange={handleChange}
-                required
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
-              >
-                <option value="">Selecione um estabelecimento</option>
-                {establishments.map((est) => (
-                  <option key={est.id} value={String(est.id)}>
-                    {est.name} {est.type ? `(${est.type})` : ""}
-                  </option>
-                ))}
-              </select>
+              {loading ? (
+                <div className="block w-full rounded-lg border-2 border-gray-300 px-3 py-2.5 text-sm bg-gray-100 text-gray-500">
+                  Carregando estabelecimentos...
+                </div>
+              ) : (
+                <>
+                  <select
+                    id="establishment_id"
+                    name="establishment_id"
+                    value={formData.establishment_id && formData.establishment_id !== 0 && formData.establishment_id !== "" ? String(formData.establishment_id) : ""}
+                    onChange={(e) => {
+                      const selectedValue = e.target.value;
+                      console.log("🔍 [NEW MERCHANT] Estabelecimento selecionado:", selectedValue);
+                      console.log("🔍 [NEW MERCHANT] Estabelecimentos disponíveis:", establishments.length);
+                      handleChange(e);
+                    }}
+                    required
+                    disabled={isEstablishmentDisabled}
+                    className={`block w-full rounded-lg border-2 px-3 py-2.5 text-sm transition-colors ${
+                      isEstablishmentDisabled
+                        ? "border-gray-200 bg-gray-100 text-gray-500 cursor-not-allowed"
+                        : "border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 hover:border-gray-400"
+                    }`}
+                  >
+                    <option value="">Selecione um estabelecimento</option>
+                    {establishments.length === 0 ? (
+                      <option value="" disabled>Nenhum estabelecimento disponível</option>
+                    ) : (
+                      establishments.map((est) => {
+                        // Obter o ID do estabelecimento (pode ser id, establishment_id ou est_id)
+                        const estId = est.id || est.establishment_id || est.est_id;
+                        const estName = est.name || `ID: ${estId}`;
+                        const estType = est.type || "";
+                        if (!estId) {
+                          console.warn("⚠️ [NEW MERCHANT] Estabelecimento sem ID:", est);
+                          return null;
+                        }
+                        return (
+                          <option key={estId} value={String(estId)}>
+                            {estName} {estType ? `(${estType})` : ""}
+                          </option>
+                        );
+                      }).filter(Boolean)
+                    )}
+                  </select>
+                  {isEstablishmentDisabled && (
+                    <p className="mt-1 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                      ℹ️ O estabelecimento está fixo porque você está adicionando um merchant a um estabelecimento existente.
+                    </p>
+                  )}
+                  {establishments.length > 0 && !isEstablishmentDisabled && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {establishments.length} estabelecimento{establishments.length !== 1 ? "s" : ""} disponível{establishments.length !== 1 ? "is" : ""}
+                    </p>
+                  )}
+                  {establishments.length === 0 && !loading && (
+                    <p className="mt-1 text-xs text-red-500">
+                      ⚠️ Nenhum estabelecimento encontrado. Verifique se há estabelecimentos cadastrados.
+                    </p>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>

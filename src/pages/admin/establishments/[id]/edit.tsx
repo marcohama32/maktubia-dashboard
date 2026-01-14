@@ -1,16 +1,20 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
-import { establishmentService, UpdateEstablishmentDTO } from "@/services/establishment.service";
+import { useAuth } from "@/contexts/AuthContext";
+import { isAdmin, isMerchant } from "@/utils/roleUtils";
+import { establishmentService, Establishment } from "@/services/establishment.service";
 import { API_BASE_URL } from "@/services/api";
 import { processImageUrl } from "@/utils/imageUrl";
+import { AlertModal } from "@/components/modals/AlertModal";
 
 export default function EditEstablishmentPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const { id } = router.query;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>("");
-  const [formData, setFormData] = useState<UpdateEstablishmentDTO>({
+  const [formData, setFormData] = useState({
     name: "",
     type: "",
     description: "",
@@ -28,28 +32,38 @@ export default function EditEstablishmentPage() {
   const [imagePreview2, setImagePreview2] = useState<string>("");
   const [imageFile1, setImageFile1] = useState<File | null>(null);
   const [imageFile2, setImageFile2] = useState<File | null>(null);
+  
+  // Estados para modais
+  const [showImageError, setShowImageError] = useState(false);
+  const [imageErrorMessage, setImageErrorMessage] = useState("");
+  
+  const userIsAdmin = user ? isAdmin(user) : false;
+  const userIsMerchant = user ? isMerchant(user) : false;
+  const canEdit = userIsAdmin || userIsMerchant;
 
   useEffect(() => {
+    // Verificar acesso
+    if (!canEdit) {
+      router.push("/admin/establishments");
+      return;
+    }
+
     // Verificar se router está pronto e se id existe
     if (!router.isReady) {
-      return; // Aguardar router estar pronto
+      return;
     }
     
-    if (id && typeof id === "string" && id !== "undefined") {
-      const numericId = parseInt(id);
-      if (!isNaN(numericId) && numericId > 0) {
-        loadEstablishment(numericId);
-      } else {
-        setError("ID inválido");
-        setLoading(false);
-      }
-    } else if (!id || id === "undefined") {
+    if (id) {
+      // Aceitar ID como string ou número
+      const establishmentId = typeof id === 'string' ? id : String(id);
+      loadEstablishment(establishmentId);
+    } else {
       setError("ID não fornecido");
       setLoading(false);
     }
-  }, [id, router.isReady]);
+  }, [id, router.isReady, canEdit]);
 
-  const loadEstablishment = async (establishmentId: number) => {
+  const loadEstablishment = async (establishmentId: string | number) => {
     try {
       setLoading(true);
       setError("");
@@ -65,16 +79,21 @@ export default function EditEstablishmentPage() {
         address: data.address || "",
         phone: data.phone || "",
         email: data.email || "",
-        image: data.image || "",
+        image: data.image || data.imageUrl || "",
         imageUrl: data.imageUrl || "",
-        qrCode: data.qrCode || "",
+        qrCode: data.qrCode || data.qr_code || "",
         color: data.color || "#4CAF50",
         isActive: activeStatus,
         status: activeStatus ? "active" : "inactive",
       });
-      
-      console.log("✅ Dados do estabelecimento carregados:", data);
-      console.log("📝 FormData atualizado:", formData);
+
+      // Carregar previews das imagens existentes
+      if (data.image) {
+        setImagePreview1(processImageUrl(data.image));
+      }
+      if (data.imageUrl) {
+        setImagePreview2(processImageUrl(data.imageUrl));
+      }
     } catch (err: any) {
       console.error("❌ Erro ao carregar estabelecimento:", err);
       setError(err.message || "Erro ao carregar estabelecimento");
@@ -92,7 +111,7 @@ export default function EditEstablishmentPage() {
       return;
     }
 
-    if (!id || typeof id !== "string") {
+    if (!id) {
       setError("ID inválido");
       return;
     }
@@ -118,19 +137,22 @@ export default function EditEstablishmentPage() {
       // Adiciona arquivos de imagem se houver
       if (imageFile1) {
         formDataToSend.append("image", imageFile1);
-      } else if (formData.image) {
+      } else if (formData.image && !formData.image.startsWith("blob:")) {
+        // Só envia URL se não for um blob (preview local)
         formDataToSend.append("image", formData.image);
       }
       
       if (imageFile2) {
         formDataToSend.append("imageUrl", imageFile2);
-      } else if (formData.imageUrl) {
+      } else if (formData.imageUrl && !formData.imageUrl.startsWith("blob:")) {
+        // Só envia URL se não for um blob (preview local)
         formDataToSend.append("imageUrl", formData.imageUrl);
       }
 
       // Envia usando fetch para poder enviar FormData
       const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
-      const response = await fetch(`${API_BASE_URL}/establishments/${id}`, {
+      const establishmentId = typeof id === 'string' ? id : String(id);
+      const response = await fetch(`${API_BASE_URL}/establishments/${establishmentId}`, {
         method: "PUT",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -139,17 +161,17 @@ export default function EditEstablishmentPage() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: "Erro ao actualizar estabelecimento" }));
-        throw new Error(errorData.message || errorData.error || "Erro ao actualizar estabelecimento");
+        const errorData = await response.json().catch(() => ({ message: "Erro ao atualizar estabelecimento" }));
+        throw new Error(errorData.message || errorData.error || "Erro ao atualizar estabelecimento");
       }
 
       await response.json();
       
       // Redireciona para a página de detalhes após salvar
-      router.push(`/admin/establishments/${id}`);
+      router.push(`/admin/establishments/${establishmentId}`);
     } catch (err: any) {
-      console.error("❌ Erro ao actualizar estabelecimento:", err);
-      setError(err.message || "Erro ao actualizar estabelecimento");
+      console.error("❌ Erro ao atualizar estabelecimento:", err);
+      setError(err.message || "Erro ao atualizar estabelecimento");
     } finally {
       setSaving(false);
     }
@@ -163,22 +185,21 @@ export default function EditEstablishmentPage() {
     }));
   };
 
-  // Função para processar URLs de imagens
-
-  // Função para lidar com upload de arquivo
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>, imageNumber: 1 | 2) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     // Verifica se é uma imagem
     if (!file.type.startsWith("image/")) {
-      alert("Por favor, seleccione um ficheiro de imagem válido");
+      setShowImageError(true);
+      setImageErrorMessage("Por favor, selecione um ficheiro de imagem válido");
       return;
     }
 
     // Verifica o tamanho (máximo 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      alert("A imagem deve ter no máximo 5MB");
+      setShowImageError(true);
+      setImageErrorMessage("A imagem deve ter no máximo 5MB");
       return;
     }
 
@@ -199,380 +220,432 @@ export default function EditEstablishmentPage() {
     reader.readAsDataURL(file);
   };
 
-  // Função para remover preview de arquivo
   const handleRemoveImage = (imageNumber: 1 | 2) => {
     if (imageNumber === 1) {
       setImagePreview1("");
       setImageFile1(null);
+      setFormData(prev => ({ ...prev, image: "" }));
     } else {
       setImagePreview2("");
       setImageFile2(null);
+      setFormData(prev => ({ ...prev, imageUrl: "" }));
     }
   };
 
-  // Função para fazer upload da imagem - não usada, enviamos diretamente no FormData
+  if (!canEdit) {
+    return null; // Será redirecionado
+  }
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-16 w-16 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600"></div>
+          <p className="text-lg font-semibold text-gray-700">Carregando estabelecimento...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
+      {/* Header */}
+      <div className="mb-6 flex items-center justify-between">
         <button
           onClick={() => router.back()}
-          className="mb-4 text-blue-600 hover:text-blue-800"
+          className="group flex items-center gap-2 rounded-xl border-2 border-gray-200 bg-white px-4 py-2.5 font-semibold text-gray-700 shadow-sm transition-all duration-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
         >
-          ← Voltar
+          <svg className="h-5 w-5 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Voltar
         </button>
-        <h1 className="text-2xl font-bold text-gray-900">Editar Estabelecimento</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Editar Estabelecimento</h1>
+        <div className="w-32"></div> {/* Spacer para centralizar */}
       </div>
 
       {error && (
-        <div className="mb-4 rounded-lg bg-red-50 p-4 text-red-700">
-          {error}
+        <div className="mb-6 rounded-xl border-2 border-red-200 bg-red-50 p-4 text-red-700 shadow-md">
+          <div className="flex items-center gap-2">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="font-semibold">{error}</span>
+          </div>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="rounded-lg bg-white p-6 shadow">
-        <div className="space-y-6">
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-              Nome <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              id="name"
-              name="name"
-              required
-              value={formData.name}
-              onChange={handleChange}
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="type" className="block text-sm font-medium text-gray-700">
-              Tipo
-            </label>
-            <select
-              id="type"
-              name="type"
-              value={formData.type || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-            >
-              <option value="">Selecione o tipo</option>
-              <option value="Loja">Loja</option>
-              <option value="Restaurante">Restaurante</option>
-              <option value="Café">Café</option>
-              <option value="Serviço">Serviço</option>
-              <option value="Outro">Outro</option>
-            </select>
-          </div>
-
-          <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-              Descrição
-            </label>
-            <textarea
-              id="description"
-              name="description"
-              rows={3}
-              value={formData.description || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="address" className="block text-sm font-medium text-gray-700">
-              Endereço
-            </label>
-            <input
-              type="text"
-              id="address"
-              name="address"
-              value={formData.address || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            <div>
-              <label htmlFor="image" className="block text-sm font-medium text-gray-700">
-                Imagem 1 (image)
-              </label>
+      <form onSubmit={handleSubmit} className="overflow-hidden rounded-2xl bg-white shadow-xl">
+        <div className="p-8">
+          <div className="space-y-8">
+            {/* Informações Básicas */}
+            <div className="border-b-2 border-gray-100 pb-6">
+              <h2 className="mb-6 flex items-center gap-2 text-xl font-bold text-gray-900">
+                <svg className="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Informações Básicas
+              </h2>
               
-              {/* Upload de arquivo */}
-              <div className="mb-2">
-                <label htmlFor="imageFile1" className="inline-flex cursor-pointer items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
-                  <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  {imageFile1 ? imageFile1.name : "Carregar Imagem"}
-                </label>
-                <input
-                  type="file"
-                  id="imageFile1"
-                  accept="image/*"
-                  onChange={(e) => handleImageFileChange(e, 1)}
-                  className="hidden"
-                />
-                {imageFile1 && (
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveImage(1)}
-                    className="ml-2 text-sm text-red-600 hover:text-red-800"
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div>
+                  <label htmlFor="name" className="mb-2 block text-sm font-semibold text-gray-700">
+                    Nome <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="name"
+                    name="name"
+                    required
+                    value={formData.name}
+                    onChange={handleChange}
+                    className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    placeholder="Nome do estabelecimento"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="type" className="mb-2 block text-sm font-semibold text-gray-700">
+                    Tipo
+                  </label>
+                  <select
+                    id="type"
+                    name="type"
+                    value={formData.type || ""}
+                    onChange={handleChange}
+                    className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                   >
-                    Remover
-                  </button>
-                )}
+                    <option value="">Selecione o tipo</option>
+                    <option value="Loja">Loja</option>
+                    <option value="Restaurante">Restaurante</option>
+                    <option value="Café">Café</option>
+                    <option value="Serviço">Serviço</option>
+                    <option value="Outro">Outro</option>
+                  </select>
+                </div>
               </div>
 
-              {/* OU URL */}
-              <div className="mb-2 text-center text-xs text-gray-500">OU</div>
-
-              {/* Campo de URL */}
-              <input
-                type="text"
-                id="image"
-                name="image"
-                value={formData.image || ""}
-                onChange={handleChange}
-                placeholder="assets/images/loja1.jpeg"
-                disabled={!!imageFile1}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100"
-              />
-              <p className="mt-1 text-xs text-gray-500">Caminho da primeira imagem</p>
-              
-              {/* Preview */}
-              {(imagePreview1 || formData.image) && (
-                <div className="group relative mt-2 overflow-hidden rounded-lg border border-gray-200">
-                  <img
-                    src={imagePreview1 || processImageUrl(formData.image || "")}
-                    alt="Preview Imagem 1"
-                    className="h-32 w-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = "/images/logo2.png";
-                    }}
-                  />
-                  <div className="absolute inset-0 flex cursor-pointer items-center justify-center bg-black bg-opacity-0 transition-all duration-200 group-hover:bg-opacity-40">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const fileInput = document.getElementById("imageFile1") as HTMLInputElement;
-                        if (fileInput) {
-                          fileInput.value = "";
-                          fileInput.click();
-                        }
-                      }}
-                      className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 opacity-0 shadow-xl transition-all duration-200 hover:bg-gray-100 group-hover:opacity-100"
-                    >
-                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      Ver Outra
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div>
-              <label htmlFor="imageUrl" className="block text-sm font-medium text-gray-700">
-                Imagem 2 (imageUrl)
-              </label>
-              
-              {/* Upload de arquivo */}
-              <div className="mb-2">
-                <label htmlFor="imageFile2" className="inline-flex cursor-pointer items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
-                  <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  {imageFile2 ? imageFile2.name : "Carregar Imagem"}
+              <div className="mt-6">
+                <label htmlFor="description" className="mb-2 block text-sm font-semibold text-gray-700">
+                  Descrição
                 </label>
-                <input
-                  type="file"
-                  id="imageFile2"
-                  accept="image/*"
-                  onChange={(e) => handleImageFileChange(e, 2)}
-                  className="hidden"
-                />
-                {imageFile2 && (
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveImage(2)}
-                    className="ml-2 text-sm text-red-600 hover:text-red-800"
-                  >
-                    Remover
-                  </button>
-                )}
-              </div>
-
-              {/* OU URL */}
-              <div className="mb-2 text-center text-xs text-gray-500">OU</div>
-
-              {/* Campo de URL */}
-              <input
-                type="text"
-                id="imageUrl"
-                name="imageUrl"
-                value={formData.imageUrl || ""}
-                onChange={handleChange}
-                placeholder="assets/images/loja2.jpeg"
-                disabled={!!imageFile2}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100"
-              />
-              <p className="mt-1 text-xs text-gray-500">Caminho da segunda imagem</p>
-              
-              {/* Preview */}
-              {(imagePreview2 || formData.imageUrl) && (
-                <div className="group relative mt-2 overflow-hidden rounded-lg border border-gray-200">
-                  <img
-                    src={imagePreview2 || processImageUrl(formData.imageUrl || "")}
-                    alt="Preview Imagem 2"
-                    className="h-32 w-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = "/images/logo2.png";
-                    }}
-                  />
-                  <div className="absolute inset-0 flex cursor-pointer items-center justify-center bg-black bg-opacity-0 transition-all duration-200 group-hover:bg-opacity-40">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const fileInput = document.getElementById("imageFile2") as HTMLInputElement;
-                        if (fileInput) {
-                          fileInput.value = "";
-                          fileInput.click();
-                        }
-                      }}
-                      className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 opacity-0 shadow-xl transition-all duration-200 hover:bg-gray-100 group-hover:opacity-100"
-                    >
-                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      Ver Outra
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            <div>
-              <label htmlFor="qrCode" className="block text-sm font-medium text-gray-700">
-                Código QR
-              </label>
-              <input
-                type="text"
-                id="qrCode"
-                name="qrCode"
-                value={formData.qrCode || ""}
-                onChange={handleChange}
-                placeholder="MAKTUBIA_SHOP_001"
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="color" className="block text-sm font-medium text-gray-700">
-                Cor
-              </label>
-              <div className="mt-1 flex gap-2">
-                <input
-                  type="color"
-                  id="color"
-                  name="color"
-                  value={formData.color || "#4CAF50"}
+                <textarea
+                  id="description"
+                  name="description"
+                  rows={4}
+                  value={formData.description || ""}
                   onChange={handleChange}
-                  className="h-10 w-20 rounded border border-gray-300"
-                />
-                <input
-                  type="text"
-                  value={formData.color || "#4CAF50"}
-                  onChange={(e) => setFormData(prev => ({ ...prev, color: e.target.value }))}
-                  placeholder="#4CAF50"
-                  className="block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                  className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  placeholder="Descrição do estabelecimento"
                 />
               </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email
-              </label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-              />
+            {/* Imagens */}
+            <div className="border-b-2 border-gray-100 pb-6">
+              <h2 className="mb-6 flex items-center gap-2 text-xl font-bold text-gray-900">
+                <svg className="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Imagens
+              </h2>
+              
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                {/* Imagem 1 */}
+                <div className="space-y-3">
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Imagem Principal
+                  </label>
+                  
+                  <div className="flex flex-col gap-3">
+                    <label
+                      htmlFor="imageFile1"
+                      className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 transition-all hover:border-blue-400 hover:bg-blue-50"
+                    >
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      {imageFile1 ? imageFile1.name : "Carregar Imagem"}
+                    </label>
+                    <input
+                      type="file"
+                      id="imageFile1"
+                      accept="image/*"
+                      onChange={(e) => handleImageFileChange(e, 1)}
+                      className="hidden"
+                    />
+                    
+                    {imageFile1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveImage(1)}
+                        className="text-sm font-medium text-red-600 hover:text-red-800"
+                      >
+                        Remover imagem
+                      </button>
+                    )}
+
+                    <div className="text-center text-xs text-gray-500">OU</div>
+
+                    <input
+                      type="text"
+                      id="image"
+                      name="image"
+                      value={formData.image || ""}
+                      onChange={handleChange}
+                      placeholder="URL ou caminho da imagem"
+                      disabled={!!imageFile1}
+                      className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-2 text-sm transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-100"
+                    />
+                  </div>
+
+                  {(imagePreview1 || formData.image) && (
+                    <div className="group relative overflow-hidden rounded-xl border-2 border-gray-200">
+                      <img
+                        src={imagePreview1 || processImageUrl(formData.image || "")}
+                        alt="Preview Imagem 1"
+                        className="h-48 w-full object-cover transition-transform group-hover:scale-105"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = "/images/logo2.png";
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Imagem 2 */}
+                <div className="space-y-3">
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Imagem Secundária
+                  </label>
+                  
+                  <div className="flex flex-col gap-3">
+                    <label
+                      htmlFor="imageFile2"
+                      className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 transition-all hover:border-blue-400 hover:bg-blue-50"
+                    >
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      {imageFile2 ? imageFile2.name : "Carregar Imagem"}
+                    </label>
+                    <input
+                      type="file"
+                      id="imageFile2"
+                      accept="image/*"
+                      onChange={(e) => handleImageFileChange(e, 2)}
+                      className="hidden"
+                    />
+                    
+                    {imageFile2 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveImage(2)}
+                        className="text-sm font-medium text-red-600 hover:text-red-800"
+                      >
+                        Remover imagem
+                      </button>
+                    )}
+
+                    <div className="text-center text-xs text-gray-500">OU</div>
+
+                    <input
+                      type="text"
+                      id="imageUrl"
+                      name="imageUrl"
+                      value={formData.imageUrl || ""}
+                      onChange={handleChange}
+                      placeholder="URL ou caminho da imagem"
+                      disabled={!!imageFile2}
+                      className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-2 text-sm transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-100"
+                    />
+                  </div>
+
+                  {(imagePreview2 || formData.imageUrl) && (
+                    <div className="group relative overflow-hidden rounded-xl border-2 border-gray-200">
+                      <img
+                        src={imagePreview2 || processImageUrl(formData.imageUrl || "")}
+                        alt="Preview Imagem 2"
+                        className="h-48 w-full object-cover transition-transform group-hover:scale-105"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = "/images/logo2.png";
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
-                Telefone
-              </label>
-              <input
-                type="tel"
-                id="phone"
-                name="phone"
-                value={formData.phone}
-                onChange={handleChange}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-              />
+            {/* Contato e Configurações */}
+            <div className="border-b-2 border-gray-100 pb-6">
+              <h2 className="mb-6 flex items-center gap-2 text-xl font-bold text-gray-900">
+                <svg className="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                Contato e Configurações
+              </h2>
+              
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div>
+                  <label htmlFor="address" className="mb-2 block text-sm font-semibold text-gray-700">
+                    Endereço
+                  </label>
+                  <input
+                    type="text"
+                    id="address"
+                    name="address"
+                    value={formData.address || ""}
+                    onChange={handleChange}
+                    className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    placeholder="Endereço completo"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="phone" className="mb-2 block text-sm font-semibold text-gray-700">
+                    Telefone
+                  </label>
+                  <input
+                    type="tel"
+                    id="phone"
+                    name="phone"
+                    value={formData.phone || ""}
+                    onChange={handleChange}
+                    className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    placeholder="+258 84 000 0000"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="email" className="mb-2 block text-sm font-semibold text-gray-700">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    value={formData.email || ""}
+                    onChange={handleChange}
+                    className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    placeholder="email@exemplo.com"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="isActive" className="mb-2 block text-sm font-semibold text-gray-700">
+                    Status
+                  </label>
+                  <select
+                    id="isActive"
+                    name="isActive"
+                    value={formData.isActive ? "true" : "false"}
+                    onChange={(e) => {
+                      const isActive = e.target.value === "true";
+                      setFormData(prev => ({ ...prev, isActive, status: isActive ? "active" : "inactive" }));
+                    }}
+                    className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    <option value="true">Ativo</option>
+                    <option value="false">Inativo</option>
+                  </select>
+                </div>
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label htmlFor="isActive" className="block text-sm font-medium text-gray-700">
-              Status
-            </label>
-            <select
-              id="isActive"
-              name="isActive"
-              value={formData.isActive ? "true" : "false"}
-              onChange={(e) => {
-                const isActive = e.target.value === "true";
-                setFormData(prev => ({ ...prev, isActive, status: isActive ? "active" : "inactive" }));
-              }}
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-            >
-              <option value="true">Ativo</option>
-              <option value="false">Inativo</option>
-            </select>
-          </div>
+            {/* QR Code e Cor */}
+            <div>
+              <h2 className="mb-6 flex items-center gap-2 text-xl font-bold text-gray-900">
+                <svg className="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                </svg>
+                Identificação
+              </h2>
+              
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div>
+                  <label htmlFor="qrCode" className="mb-2 block text-sm font-semibold text-gray-700">
+                    Código QR
+                  </label>
+                  <input
+                    type="text"
+                    id="qrCode"
+                    name="qrCode"
+                    value={formData.qrCode || ""}
+                    onChange={handleChange}
+                    placeholder="MAKTUBIA_SHOP_001"
+                    className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 font-mono text-sm transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">⚠️ Alterar o QR code pode afetar compras existentes</p>
+                </div>
 
-          <div className="flex justify-end space-x-4">
-            <button
-              type="button"
-              onClick={() => router.back()}
-              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 hover:bg-gray-50"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
-            >
-              {saving ? "A guardar..." : "Guardar"}
-            </button>
+                <div>
+                  <label htmlFor="color" className="mb-2 block text-sm font-semibold text-gray-700">
+                    Cor do Estabelecimento
+                  </label>
+                  <div className="flex gap-3">
+                    <input
+                      type="color"
+                      id="color"
+                      name="color"
+                      value={formData.color || "#4CAF50"}
+                      onChange={handleChange}
+                      className="h-14 w-20 cursor-pointer rounded-xl border-2 border-gray-200"
+                    />
+                    <input
+                      type="text"
+                      value={formData.color || "#4CAF50"}
+                      onChange={(e) => setFormData(prev => ({ ...prev, color: e.target.value }))}
+                      placeholder="#4CAF50"
+                      className="flex-1 rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 font-mono text-sm transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Botões de Ação */}
+            <div className="flex justify-end gap-4 border-t-2 border-gray-100 pt-6">
+              <button
+                type="button"
+                onClick={() => router.back()}
+                className="rounded-xl border-2 border-gray-300 bg-white px-6 py-3 font-semibold text-gray-700 shadow-sm transition-all hover:border-gray-400 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-3 font-semibold text-white shadow-lg shadow-blue-500/25 transition-all duration-200 hover:from-blue-700 hover:to-blue-800 hover:shadow-xl hover:shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saving ? (
+                  <>
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                    Guardando...
+                  </>
+                ) : (
+                  <>
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Guardar Alterações
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </form>
+
+      {/* Modal de Erro de Imagem */}
+      <AlertModal
+        isOpen={showImageError}
+        onClose={() => setShowImageError(false)}
+        title="Erro"
+        message={imageErrorMessage}
+        type="error"
+        confirmText="OK"
+      />
     </div>
   );
 }
-

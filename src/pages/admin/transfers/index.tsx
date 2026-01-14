@@ -1,16 +1,18 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
+import { useAuth } from "@/contexts/AuthContext";
+import { isUser, isAdmin, isMerchant } from "@/utils/roleUtils";
 import { transferService, Transfer, TransferPointsDTO } from "@/services/transfer.service";
 import { friendsService, Friend } from "@/services/friends.service";
 import { ConfirmModal } from "@/components/modals/ConfirmModal";
 import { AlertModal } from "@/components/modals/AlertModal";
-import { useAuth } from "@/contexts/AuthContext";
 
 const ITEMS_PER_PAGE = 10;
 
 export default function TransfersPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const userIsClient = user ? isUser(user) && !isAdmin(user) && !isMerchant(user) : false;
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [loading, setLoading] = useState(false);
@@ -37,15 +39,21 @@ export default function TransfersPage() {
     if (typeof window !== "undefined" && "requestIdleCallback" in window) {
       (window as any).requestIdleCallback(() => {
         loadTransfers();
-        loadFriends();
+        // Apenas carregar amigos se não for cliente (endpoint pode não existir para clientes)
+        if (!userIsClient) {
+          loadFriends();
+        }
       }, { timeout: 100 });
     } else {
       setTimeout(() => {
         loadTransfers();
-        loadFriends();
+        // Apenas carregar amigos se não for cliente
+        if (!userIsClient) {
+          loadFriends();
+        }
       }, 50);
     }
-  }, [currentPage, typeFilter]);
+  }, [currentPage, typeFilter, userIsClient]);
 
   const loadTransfers = async () => {
     try {
@@ -72,7 +80,12 @@ export default function TransfersPage() {
       const response = await friendsService.getFriends();
       setFriends(response.data || []);
     } catch (err: any) {
-      console.error("Erro ao carregar amigos:", err);
+      // Silenciar erro 404 para não poluir o console (endpoint pode não existir)
+      if (err?.response?.status !== 404) {
+        console.error("Erro ao carregar amigos:", err);
+      }
+      // Se o endpoint não existir, apenas não carregar amigos
+      setFriends([]);
     }
   };
 
@@ -180,29 +193,31 @@ export default function TransfersPage() {
       )}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Transferências P2P</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{userIsClient ? "Minhas Transferências" : "Transferências P2P"}</h1>
           <p className="mt-1 text-sm text-gray-600">
-            Transfira pontos para seus Maktubia Friends
+            {userIsClient ? "Visualize suas transferências de pontos" : "Transfira pontos para seus Maktubia Friends"}
           </p>
         </div>
-        <button
-          onClick={() => {
-            if (friends.length === 0) {
-              setAlertConfig({
-                title: "Atenção",
-                message: "Você precisa ter amigos para transferir pontos. Adicione amigos primeiro!",
-                type: "warning",
-              });
-              setAlertModalOpen(true);
-              router.push("/admin/friends");
-            } else {
-              setShowTransferModal(true);
-            }
-          }}
-          className="rounded-lg bg-green-600 px-4 py-2 text-white transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-        >
-          + Transferir Pontos
-        </button>
+        {!userIsClient && (
+          <button
+            onClick={() => {
+              if (friends.length === 0) {
+                setAlertConfig({
+                  title: "Atenção",
+                  message: "Você precisa ter amigos para transferir pontos. Adicione amigos primeiro!",
+                  type: "warning",
+                });
+                setAlertModalOpen(true);
+                router.push("/admin/friends");
+              } else {
+                setShowTransferModal(true);
+              }
+            }}
+            className="rounded-lg bg-green-600 px-4 py-2 text-white transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+          >
+            + Transferir Pontos
+          </button>
+        )}
       </div>
 
       {/* Filtros */}
@@ -215,7 +230,7 @@ export default function TransfersPage() {
           </div>
           <input
             type="text"
-            placeholder="Pesquisar transferências por nome, código ou descrição..."
+            placeholder={userIsClient ? "Pesquisar transferências por descrição..." : "Pesquisar transferências por nome, código ou descrição..."}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="block w-full rounded-lg border border-gray-300 py-2 pl-10 pr-3 focus:border-blue-500 focus:ring-blue-500"

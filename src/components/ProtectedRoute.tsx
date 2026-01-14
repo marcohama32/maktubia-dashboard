@@ -1,13 +1,14 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/AuthContext";
-import { isAdmin, isMerchant, getUserRole } from "@/utils/roleUtils";
+import { isAdmin, isMerchant, isUser, getUserRole } from "@/utils/roleUtils";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
   allowedRoles?: ("admin" | "merchant" | "user")[];
   requireAdmin?: boolean;
   requireMerchant?: boolean;
+  requireClient?: boolean;
   redirectTo?: string;
 }
 
@@ -16,6 +17,7 @@ export function ProtectedRoute({
   allowedRoles,
   requireAdmin = false,
   requireMerchant = false,
+  requireClient = false,
   redirectTo,
 }: ProtectedRouteProps) {
   const { user, isAuthenticated, loading: authLoading } = useAuth();
@@ -76,14 +78,35 @@ export function ProtectedRoute({
     const userRole = getUserRole(user);
     const userIsAdmin = isAdmin(user);
     const userIsMerchant = isMerchant(user);
+    const userIsUser = isUser(user); // Cliente comum
+    
+    // Debug para requireClient
+    if (requireClient && typeof window !== 'undefined') {
+      console.log('🔍 [ProtectedRoute] Verificando requireClient:', {
+        userRole,
+        userIsAdmin,
+        userIsMerchant,
+        userIsUser,
+        requireClient,
+        user
+      });
+    }
 
-    // Verificação global: apenas admin e merchant podem acessar o sistema
-    if (!userIsAdmin && !userIsMerchant) {
-      // Redirecionar para login se não for admin nem merchant
+    // Verificação global: apenas admin, merchant ou user (cliente) podem acessar o sistema
+    // Se allowedRoles incluir "user", permitir clientes também
+    // Se requireClient for true, também permitir clientes
+    const allowsUsers = allowedRoles && allowedRoles.includes("user");
+    const allowsClient = requireClient || allowsUsers;
+    
+    // Permitir acesso se for admin, merchant, ou se a rota permitir clientes
+    const hasBasicAccess = userIsAdmin || userIsMerchant || allowsClient || userIsUser;
+    
+    if (!hasBasicAccess) {
+      // Redirecionar para login se não for admin, merchant ou se a rota não permitir users
       if (!redirectingRef.current) {
         redirectingRef.current = true;
-        // Limpar token e deslogar
-        if (typeof window !== "undefined") {
+        // Limpar token e deslogar apenas se não permitir users
+        if (typeof window !== "undefined" && !allowsClient) {
           localStorage.removeItem("auth_token");
         }
         router.replace("/login").catch(() => {
@@ -110,12 +133,24 @@ export function ProtectedRoute({
     else if (requireMerchant) {
       accessGranted = userIsMerchant;
     }
+    // Verificar se requer client
+    else if (requireClient) {
+      accessGranted = userIsUser;
+      if (typeof window !== 'undefined') {
+        console.log('🔍 [ProtectedRoute] Verificação requireClient:', {
+          requireClient,
+          userIsUser,
+          accessGranted,
+          userRole
+        });
+      }
+    }
     // Verificar allowedRoles
     else if (allowedRoles && allowedRoles.length > 0) {
       accessGranted = allowedRoles.some((role) => {
         if (role === "admin") return userIsAdmin;
         if (role === "merchant") return userIsMerchant;
-        if (role === "user") return !userIsAdmin && !userIsMerchant;
+        if (role === "user") return userIsUser; // Cliente comum
         return false;
       });
     }
@@ -150,7 +185,7 @@ export function ProtectedRoute({
         timeoutRef.current = null;
       }
     };
-  }, [user, isAuthenticated, authLoading, requireAdmin, requireMerchant, allowedRoles, redirectTo, router.pathname, router.asPath]);
+  }, [user, isAuthenticated, authLoading, requireAdmin, requireMerchant, requireClient, allowedRoles, redirectTo, router.pathname, router.asPath]);
 
   // Mostrar loading enquanto verifica
   if (authLoading || isChecking) {

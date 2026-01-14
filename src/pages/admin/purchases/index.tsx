@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
+import { useAuth } from "@/contexts/AuthContext";
+import { isUser, isAdmin, isMerchant } from "@/utils/roleUtils";
 import { purchaseService, Purchase, PurchaseStatus } from "@/services/purchase.service";
 import { ConfirmModal } from "@/components/modals/ConfirmModal";
 import { AlertModal } from "@/components/modals/AlertModal";
@@ -9,6 +11,8 @@ const ITEMS_PER_PAGE = 10;
 
 export default function PurchasesPage() {
   const router = useRouter();
+  const { user } = useAuth();
+  const userIsClient = user ? isUser(user) && !isAdmin(user) && !isMerchant(user) : false;
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
@@ -48,14 +52,21 @@ export default function PurchasesPage() {
       if (statusFilter) {
         params.status = statusFilter;
       }
+      // Para clientes, o backend deve filtrar automaticamente por user_id
+      // Não precisamos passar user_id explicitamente, o backend usa o token
       const response = await purchaseService.getAll(params);
-      setPurchases(response.data);
+      setPurchases(response.data || []);
       setPagination(response.pagination || null);
       setMetrics(response.metrics || null);
     } catch (err: any) {
       console.error("Erro ao carregar compras:", err);
       const errorMessage = err.message || "Erro ao carregar compras";
       setError(errorMessage);
+      
+      // Se for erro 500, pode ser problema no backend
+      if (err?.response?.status === 500) {
+        setError("Erro no servidor ao carregar compras. Por favor, tente novamente mais tarde ou contacte o suporte.");
+      }
     } finally {
       setLoading(false);
     }
@@ -371,68 +382,70 @@ export default function PurchasesPage() {
 
             </div>
 
-            {/* Outras Métricas - Segunda Linha */}
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-              {/* Métricas de Receita */}
-              <div className="rounded-lg border border-gray-200 bg-white p-4 shadow">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Receita Total</p>
-                <p className="text-2xl font-bold text-blue-600">{formatCurrency(metrics.revenue?.total || 0)}</p>
-                <div className="mt-2 text-xs text-gray-600">
-                  Confirmada: {formatCurrency(metrics.revenue?.confirmed || 0)}
-                </div>
-                {metrics.revenue?.avgPurchaseAmount && (
-                  <div className="mt-1 text-xs text-gray-500">
-                    Média: {formatCurrency(metrics.revenue.avgPurchaseAmount)}
-                  </div>
-                )}
-              </div>
-
-              {/* Métricas de Pontos */}
-              <div className="rounded-lg border border-gray-200 bg-white p-4 shadow">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Pontos Distribuídos</p>
-                <p className="text-2xl font-bold text-purple-600">{metrics.points?.totalGiven || 0} pts</p>
-                <div className="mt-2 text-xs text-gray-600">
-                  Confirmados: {metrics.points?.totalConfirmed || 0} pts
-                </div>
-                {metrics.points?.avgPointsPerPurchase && (
-                  <div className="mt-1 text-xs text-gray-500">
-                    Média por compra: {Math.round(metrics.points.avgPointsPerPurchase)} pts
-                  </div>
-                )}
-              </div>
-
-              {/* Métricas de Clientes e Estabelecimentos */}
-              <div className="rounded-lg border border-gray-200 bg-white p-4 shadow">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Participantes</p>
-                <div className="mt-2 space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Clientes únicos:</span>
-                    <span className="font-semibold text-gray-900">{metrics.customers?.unique || 0}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Estabelecimentos:</span>
-                    <span className="font-semibold text-gray-900">{metrics.establishments?.unique || 0}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Métricas Adicionais de Receita (se disponíveis) */}
-              {metrics.revenue && (metrics.revenue.maxPurchaseAmount || metrics.revenue.minPurchaseAmount) && (
+            {/* Outras Métricas - Segunda Linha (apenas para admin/merchant) */}
+            {!userIsClient && (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+                {/* Métricas de Receita */}
                 <div className="rounded-lg border border-gray-200 bg-white p-4 shadow">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Valores</p>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Receita Total</p>
+                  <p className="text-2xl font-bold text-blue-600">{formatCurrency(metrics.revenue?.total || 0)}</p>
+                  <div className="mt-2 text-xs text-gray-600">
+                    Confirmada: {formatCurrency(metrics.revenue?.confirmed || 0)}
+                  </div>
+                  {metrics.revenue?.avgPurchaseAmount && (
+                    <div className="mt-1 text-xs text-gray-500">
+                      Média: {formatCurrency(metrics.revenue.avgPurchaseAmount)}
+                    </div>
+                  )}
+                </div>
+
+                {/* Métricas de Pontos */}
+                <div className="rounded-lg border border-gray-200 bg-white p-4 shadow">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Pontos Distribuídos</p>
+                  <p className="text-2xl font-bold text-purple-600">{metrics.points?.totalGiven || 0} pts</p>
+                  <div className="mt-2 text-xs text-gray-600">
+                    Confirmados: {metrics.points?.totalConfirmed || 0} pts
+                  </div>
+                  {metrics.points?.avgPointsPerPurchase && (
+                    <div className="mt-1 text-xs text-gray-500">
+                      Média por compra: {Math.round(metrics.points.avgPointsPerPurchase)} pts
+                    </div>
+                  )}
+                </div>
+
+                {/* Métricas de Clientes e Estabelecimentos */}
+                <div className="rounded-lg border border-gray-200 bg-white p-4 shadow">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Participantes</p>
                   <div className="mt-2 space-y-1">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Maior compra:</span>
-                      <span className="font-semibold text-green-600">{formatCurrency(metrics.revenue.maxPurchaseAmount || 0)}</span>
+                      <span className="text-gray-600">Clientes únicos:</span>
+                      <span className="font-semibold text-gray-900">{metrics.customers?.unique || 0}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Menor compra:</span>
-                      <span className="font-semibold text-gray-900">{formatCurrency(metrics.revenue.minPurchaseAmount || 0)}</span>
+                      <span className="text-gray-600">Estabelecimentos:</span>
+                      <span className="font-semibold text-gray-900">{metrics.establishments?.unique || 0}</span>
                     </div>
                   </div>
                 </div>
-              )}
-            </div>
+
+                {/* Métricas Adicionais de Receita (se disponíveis) */}
+                {metrics.revenue && (metrics.revenue.maxPurchaseAmount || metrics.revenue.minPurchaseAmount) && (
+                  <div className="rounded-lg border border-gray-200 bg-white p-4 shadow">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Valores</p>
+                    <div className="mt-2 space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Maior compra:</span>
+                        <span className="font-semibold text-green-600">{formatCurrency(metrics.revenue.maxPurchaseAmount || 0)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Menor compra:</span>
+                        <span className="font-semibold text-gray-900">{formatCurrency(metrics.revenue.minPurchaseAmount || 0)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -446,7 +459,7 @@ export default function PurchasesPage() {
           </div>
           <input
             type="text"
-            placeholder="Pesquisar por código de compra, cliente ou estabelecimento..."
+            placeholder={userIsClient ? "Pesquisar por código de compra ou estabelecimento..." : "Pesquisar por código de compra, cliente ou estabelecimento..."}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="block w-full rounded-lg border border-gray-300 py-2 pl-10 pr-3 focus:border-blue-500 focus:ring-blue-500"
@@ -523,9 +536,11 @@ export default function PurchasesPage() {
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                       Data
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                      Ações
-                    </th>
+                    {!userIsClient && (
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                        Ações
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
@@ -581,8 +596,48 @@ export default function PurchasesPage() {
                         <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                           {formatDate(purchaseDate)}
                         </td>
-                        <td className="whitespace-nowrap px-6 py-4 text-sm font-medium">
-                          <div className="flex items-center gap-2">
+                        {!userIsClient && (
+                          <td className="whitespace-nowrap px-6 py-4 text-sm font-medium">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleView(purchaseId)}
+                                className="text-green-600 hover:text-green-900"
+                                title="Ver detalhes"
+                              >
+                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                              </button>
+                              {status === "pending" && (
+                                <>
+                                  <button
+                                    onClick={() => handleConfirmClick(purchase)}
+                                    disabled={confirmLoading || rejectLoading}
+                                    className="text-blue-600 hover:text-blue-900 disabled:opacity-50"
+                                    title="Confirmar compra"
+                                  >
+                                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    onClick={() => handleRejectClick(purchase)}
+                                    disabled={confirmLoading || rejectLoading}
+                                    className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                                    title="Rejeitar compra"
+                                  >
+                                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                        {userIsClient && (
+                          <td className="whitespace-nowrap px-6 py-4 text-sm font-medium">
                             <button
                               onClick={() => handleView(purchaseId)}
                               className="text-green-600 hover:text-green-900"
@@ -593,32 +648,8 @@ export default function PurchasesPage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                               </svg>
                             </button>
-                            {status === "pending" && (
-                              <>
-                                <button
-                                  onClick={() => handleConfirmClick(purchase)}
-                                  disabled={confirmLoading || rejectLoading}
-                                  className="text-blue-600 hover:text-blue-900 disabled:opacity-50"
-                                  title="Confirmar compra"
-                                >
-                                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                </button>
-                                <button
-                                  onClick={() => handleRejectClick(purchase)}
-                                  disabled={confirmLoading || rejectLoading}
-                                  className="text-red-600 hover:text-red-900 disabled:opacity-50"
-                                  title="Rejeitar compra"
-                                >
-                                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}

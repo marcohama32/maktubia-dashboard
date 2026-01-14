@@ -39,8 +39,6 @@ export default function Login() {
     username: string;
     email: string;
     phone: string;
-    documentType: DocumentType;
-    documentNumber: string;
     password: string;
     confirmPassword: string;
   }>({
@@ -49,14 +47,11 @@ export default function Login() {
     username: "",
     email: "",
     phone: "",
-    documentType: "BI",
-    documentNumber: "",
     password: "",
     confirmPassword: "",
   });
   const [registerErrors, setRegisterErrors] = useState<{
     phone?: string;
-    document?: string;
     general?: string;
   }>({});
   const [registerLoading, setRegisterLoading] = useState(false);
@@ -280,20 +275,11 @@ export default function Login() {
       }
     }
 
-    // Validar documento
-    if (registerData.documentNumber) {
-      const documentValidation = validateDocumentNumber(registerData.documentType, registerData.documentNumber);
-      if (!documentValidation.isValid) {
-        setRegisterErrors({ document: documentValidation.error || "Documento inválido" });
-        return;
-      }
-    }
-
     try {
       setRegisterLoading(true);
 
       // Preparar dados para envio - apenas role "user" (cliente)
-      const userData: CreateUserDTO & { tipo_documento?: string; numero_documento?: string } = {
+      const userData: CreateUserDTO = {
         firstName: registerData.firstName,
         lastName: registerData.lastName,
         username: registerData.username,
@@ -302,11 +288,6 @@ export default function Login() {
         password: registerData.password,
         role: "user", // Apenas role "user" (cliente) pode se cadastrar
         isActive: true,
-        // Enviar tipo_documento e numero_documento
-        tipo_documento: registerData.documentType && registerData.documentNumber ? registerData.documentType : undefined,
-        numero_documento: registerData.documentNumber
-          ? formatDocumentNumber(registerData.documentType, registerData.documentNumber).replace(/\s+/g, "")
-          : undefined,
       };
 
       // Remover campos undefined
@@ -342,8 +323,6 @@ export default function Login() {
           username: "",
           email: "",
           phone: "",
-          documentType: "BI",
-          documentNumber: "",
           password: "",
           confirmPassword: "",
         });
@@ -448,16 +427,25 @@ export default function Login() {
         {/* Card principal com sombra elegante */}
         <div className="rounded-2xl bg-white p-8 shadow-2xl ring-1 ring-gray-200/50">
           <div className="mb-8 text-center">
-            {/* Logo */}
-            <div className="mb-6 flex justify-center">
+            {/* Logos lado a lado */}
+            <div className="mb-6 flex justify-center items-center gap-6">
               <Image
-                src="/images/logo2.png"
-                alt="Maktubia Logo"
-                width={80}
-                height={80}
+                src="/images/logo1.png"
+                alt="Maktubia Logo 1"
+                width={150}
+                height={150}
                 className="object-contain"
                 priority
-                sizes="80px"
+                sizes="150px"
+              />
+              <Image
+                src="/images/logo3.png"
+                alt="Maktubia Logo 3"
+                width={150}
+                height={150}
+                className="object-contain"
+                priority
+                sizes="150px"
               />
             </div>
             
@@ -527,6 +515,7 @@ export default function Login() {
                 name="identifier"
                 type="text"
                 required
+                autoComplete="username"
                 disabled={loading || !!cooldownEnd}
                 className="w-full rounded-xl border border-gray-300 bg-gray-50/50 pl-10 pr-4 py-3 text-sm transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-gray-100 disabled:cursor-not-allowed"
                 placeholder="Usuário ou telefone"
@@ -621,7 +610,7 @@ export default function Login() {
                 A entrar...
               </span>
             ) : (
-              "Entrar"
+              "Login"
             )}
           </button>
 
@@ -786,87 +775,6 @@ export default function Login() {
                   {registerErrors.phone}
                 </p>
               )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="documentType" className="mb-2 block text-sm font-medium text-gray-700">
-                  Tipo de Documento
-                </label>
-                <select
-                  id="documentType"
-                  name="documentType"
-                  disabled={registerLoading}
-                  className="w-full rounded-xl border border-gray-300 bg-gray-50/50 px-4 py-3 text-sm transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  value={registerData.documentType}
-                  onChange={(e) => {
-                    setRegisterData({
-                      ...registerData,
-                      documentType: e.target.value as DocumentType,
-                      documentNumber: "",
-                    });
-                    setRegisterErrors({ ...registerErrors, document: undefined });
-                  }}
-                >
-                  {MOZAMBIQUE_DOCUMENT_TYPES.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="documentNumber" className="mb-2 block text-sm font-medium text-gray-700">
-                  Número do Documento
-                </label>
-                <input
-                  id="documentNumber"
-                  name="documentNumber"
-                  type="text"
-                  disabled={registerLoading}
-                  className={`w-full rounded-xl border bg-gray-50/50 px-4 py-3 text-sm transition-all focus:outline-none focus:ring-2 disabled:bg-gray-100 disabled:cursor-not-allowed ${
-                    registerErrors.document
-                      ? "border-red-300 focus:border-red-500 focus:bg-white focus:ring-red-500/20"
-                      : "border-gray-300 focus:border-blue-500 focus:bg-white focus:ring-blue-500/20"
-                  }`}
-                  placeholder="Número do documento"
-                  value={registerData.documentNumber}
-                  onChange={(e) => {
-                    setRegisterData({ ...registerData, documentNumber: e.target.value });
-                    setRegisterErrors({ ...registerErrors, document: undefined });
-                  }}
-                  onBlur={() => {
-                    if (registerData.documentNumber) {
-                      const validation = validateDocumentNumber(
-                        registerData.documentType,
-                        registerData.documentNumber
-                      );
-                      if (!validation.isValid) {
-                        setRegisterErrors({
-                          ...registerErrors,
-                          document: validation.error || "Documento inválido",
-                        });
-                      } else {
-                        setRegisterData({
-                          ...registerData,
-                          documentNumber: formatDocumentNumber(
-                            registerData.documentType,
-                            registerData.documentNumber
-                          ),
-                        });
-                      }
-                    }
-                  }}
-                />
-                {registerErrors.document && (
-                  <p className="mt-1.5 text-xs text-red-600 flex items-center gap-1">
-                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {registerErrors.document}
-                  </p>
-                )}
-              </div>
             </div>
 
             <div>

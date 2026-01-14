@@ -85,78 +85,151 @@ export interface UpdateEstablishmentDTO extends Partial<CreateEstablishmentDTO> 
 export const establishmentService = {
   async getAll(includeInactive: boolean = true): Promise<Establishment[]> {
     try {
-      // Buscar todos os estabelecimentos sem parâmetros adicionais
-      // O backend deve retornar todos os estabelecimentos por padrão
-      const url = "/establishments";
-      console.log("🔍 EstablishmentService.getAll - Fazendo requisição para:", url);
-      console.log("🔍 EstablishmentService.getAll - baseURL:", api.defaults.baseURL);
-      console.log("🔍 EstablishmentService.getAll - URL completa:", `${api.defaults.baseURL}${url}`);
-      const response = await api.get(url);
+      // Carregar todos os estabelecimentos fazendo requisições paginadas
+      let allEstablishments: any[] = [];
+      let page = 1;
+      const limit = 100; // Limite por página (ajustar conforme necessário)
+      let hasMore = true;
       
-      // O backend retorna os dados no formato:
-      // { success: true, data: [{...}, {...}], pagination: {...}, meta: {...} }
-      
-      let establishments: any[] = [];
-      
-      // Verificar primeiro o formato esperado: { success: true, data: [...] }
-      if (response.data?.success === true && Array.isArray(response.data.data)) {
-        establishments = response.data.data;
-      } 
-      // Fallback: formato direto como array
-      else if (Array.isArray(response.data)) {
-        establishments = response.data;
-      } 
-      // Fallback: formato com wrapper { data: [...] }
-      else if (response.data?.data && Array.isArray(response.data.data)) {
-        establishments = response.data.data;
-      } 
-      // Fallback: formato com nome { establishments: [...] }
-      else if (response.data?.establishments && Array.isArray(response.data.establishments)) {
-        establishments = response.data.establishments;
-      } else {
-        console.error("Formato de resposta inesperado:", response.data);
-        throw new Error("Formato de resposta inesperado do backend");
+      while (hasMore) {
+        // Construir URL com parâmetros de paginação
+        const params = new URLSearchParams({
+          page: page.toString(),
+          limit: limit.toString(),
+        });
+        
+        // Adicionar filtro de status se necessário
+        if (!includeInactive) {
+          params.append('is_active', 'true');
+        }
+        
+        const url = `/establishments?${params.toString()}`;
+        const response = await api.get(url);
+        
+        // O backend retorna os dados no formato:
+        // { success: true, data: [{...}, {...}], pagination: {...}, meta: {...} }
+        
+        let establishments: any[] = [];
+        
+        // Verificar primeiro o formato esperado: { success: true, data: [...] }
+        if (response.data?.success === true && Array.isArray(response.data.data)) {
+          establishments = response.data.data;
+        } 
+        // Fallback: formato direto como array
+        else if (Array.isArray(response.data)) {
+          establishments = response.data;
+        } 
+        // Fallback: formato com wrapper { data: [...] }
+        else if (response.data?.data && Array.isArray(response.data.data)) {
+          establishments = response.data.data;
+        } 
+        // Fallback: formato com nome { establishments: [...] }
+        else if (response.data?.establishments && Array.isArray(response.data.establishments)) {
+          establishments = response.data.establishments;
+        } else {
+          console.error("Formato de resposta inesperado:", response.data);
+          throw new Error("Formato de resposta inesperado do backend");
+        }
+        
+        // Adicionar estabelecimentos da página atual ao array total
+        allEstablishments = [...allEstablishments, ...establishments];
+        
+        // Verificar se há mais páginas
+        const pagination = response.data?.pagination;
+        if (pagination) {
+          // Usar totalPages se disponível para ser mais eficiente
+          if (pagination.totalPages !== undefined) {
+            hasMore = page < pagination.totalPages;
+          } else {
+            hasMore = pagination.hasNextPage === true;
+          }
+          page++;
+        } else {
+          // Se não houver informação de paginação, verificar se retornou menos que o limite
+          hasMore = establishments.length === limit;
+          page++;
+        }
+        
+        // Limite de segurança para evitar loop infinito
+        if (page > 1000) {
+          console.warn("⚠️ Limite de páginas atingido. Parando carregamento.");
+          break;
+        }
+        
+        // Se não retornou nenhum estabelecimento, parar
+        if (establishments.length === 0) {
+          hasMore = false;
+        }
       }
       
-      // Normalizar IDs - garantir que todos tenham 'id' como número
+      let establishments = allEstablishments;
+      
+      // Normalizar IDs - aceitar números ou strings não vazias
       const normalized = establishments.map((est: any) => {
-        // Se já tem id válido, normalizar para número
+        // O backend retorna id diretamente, mas vamos garantir que está normalizado
+        let finalId = null;
+        
+        // Prioridade 1: est.id (campo principal)
         if (est.id != null && est.id !== undefined && est.id !== "") {
-          const id = Number(est.id);
-          if (!isNaN(id) && id > 0) {
-            return { ...est, id: id };
+          const numId = Number(est.id);
+          if (!isNaN(numId) && numId > 0) {
+            finalId = numId;
+          } else if (typeof est.id === "string" && est.id.trim().length > 0) {
+            finalId = est.id;
           }
         }
         
-        // Tentar _id (MongoDB/ObjectId) como fallback
-        if (est._id != null && est._id !== undefined && est._id !== "") {
+        // Prioridade 2: est_id (campo alternativo do backend)
+        if (!finalId && est.est_id != null && est.est_id !== undefined && est.est_id !== "") {
+          const numId = Number(est.est_id);
+          if (!isNaN(numId) && numId > 0) {
+            finalId = numId;
+          } else if (typeof est.est_id === "string" && est.est_id.trim().length > 0) {
+            finalId = est.est_id;
+          }
+        }
+        
+        // Prioridade 3: establishment_id
+        if (!finalId && est.establishment_id != null && est.establishment_id !== undefined && est.establishment_id !== "") {
+          const numId = Number(est.establishment_id);
+          if (!isNaN(numId) && numId > 0) {
+            finalId = numId;
+          } else if (typeof est.establishment_id === "string" && est.establishment_id.trim().length > 0) {
+            finalId = est.establishment_id;
+          }
+        }
+        
+        // Prioridade 4: _id (MongoDB/ObjectId)
+        if (!finalId && est._id != null && est._id !== undefined && est._id !== "") {
           if (typeof est._id === "string") {
-            const id = parseInt(est._id, 10);
-            if (!isNaN(id) && id > 0) {
-              return { ...est, id: id };
+            const numId = parseInt(est._id, 10);
+            if (!isNaN(numId) && numId > 0) {
+              finalId = numId;
+            } else if (est._id.trim().length > 0) {
+              finalId = est._id;
             }
           } else {
-            const id = Number(est._id);
-            if (!isNaN(id) && id > 0) {
-              return { ...est, id: id };
+            const numId = Number(est._id);
+            if (!isNaN(numId) && numId > 0) {
+              finalId = numId;
             }
           }
         }
         
-        // Tentar establishment_id como fallback
-        if (est.establishment_id != null && est.establishment_id !== undefined && est.establishment_id !== "") {
-          const id = Number(est.establishment_id);
-          if (!isNaN(id) && id > 0) {
-            return { ...est, id: id };
-          }
+        // Se encontrou ID válido, retornar com id normalizado
+        if (finalId != null) {
+          return { ...est, id: finalId };
         }
         
         // Se não encontrou ID válido, logar e retornar como está
-        // (mas isso não deveria acontecer com a estrutura atual da API)
         console.warn("⚠️ Estabelecimento sem ID válido:", {
           name: est.name,
           type: est.type,
-          keys: Object.keys(est)
+          keys: Object.keys(est),
+          id: est.id,
+          est_id: est.est_id,
+          _id: est._id,
+          establishment_id: est.establishment_id
         });
         
         return est;
@@ -205,15 +278,18 @@ export const establishmentService = {
     }
   },
 
-  async getById(id: number): Promise<Establishment> {
+  async getById(id: number | string): Promise<Establishment> {
     try {
       // Validar ID antes de fazer a requisição
-      if (!id || isNaN(id) || id <= 0) {
+      // Aceitar números ou strings não vazias
+      if (!id || id === "" || (typeof id === 'number' && (isNaN(id) || id <= 0))) {
         console.error("ID inválido para getById:", id);
         throw new Error("ID inválido para buscar estabelecimento");
       }
       
-      const response = await api.get(`/establishments/${id}`);
+      // Converter para string para a URL (aceita números e strings)
+      const idString = String(id);
+      const response = await api.get(`/establishments/${idString}`);
       
       // O backend pode retornar os dados em diferentes formatos:
       // - Direto: {...}
@@ -347,10 +423,11 @@ export const establishmentService = {
     }
   },
 
-  async delete(id: number): Promise<void> {
+  async delete(id: number | string): Promise<void> {
     try {
       // Validar ID antes de fazer a requisição
-      if (!id || isNaN(id) || id <= 0) {
+      // Aceita tanto números quanto strings (ex: "EST_1768143137208_hliai")
+      if (!id || (typeof id === 'string' && id.trim() === '') || (typeof id === 'number' && (isNaN(id) || id <= 0))) {
         console.error("ID inválido para delete:", id);
         throw new Error("ID inválido para eliminar estabelecimento");
       }

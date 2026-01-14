@@ -4,7 +4,7 @@ import { getSidebarData, iconMap, SidebarItem } from "./data";
 import { useRouter } from "next/router";
 import { useCallback, useMemo, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { isAdmin, isMerchant, getUserRole } from "@/utils/roleUtils";
+import { isAdmin, isMerchant, isUser, getUserRole } from "@/utils/roleUtils";
 
 const style = {
   title: "font-normal mx-4 text-sm",
@@ -114,10 +114,11 @@ export function SidebarItems() {
       return data;
     }
     
-    // Verificar se o usuário é admin ou merchant
+    // Verificar se o usuário é admin, merchant ou cliente
     const userRole = getUserRole(user);
     const userIsAdmin = isAdmin(user);
     const userIsMerchant = isMerchant(user);
+    const userIsUser = isUser(user);
     
     // Debug: logar informações do usuário
     if (typeof window !== "undefined") {
@@ -127,11 +128,46 @@ export function SidebarItems() {
         roleNormalized: userRole,
         isAdmin: userIsAdmin,
         isMerchant: userIsMerchant,
+        isUser: userIsUser,
         totalItems: data.length,
       });
     }
     
     const filtered = data.filter(item => {
+      // Clientes (usuários comuns) só veem itens específicos
+      if (userIsUser && !userIsAdmin && !userIsMerchant) {
+        // Dashboard - sim
+        if (item.link === "/" && item.title === "Dashboard") {
+          return true;
+        }
+        // Campanhas - sim (campanhas públicas)
+        if (item.link === "/admin/campaigns" && item.title === "Campanhas") {
+          return true;
+        }
+        // Pontos > Transferências - sim
+        if (item.link === "/admin/transfers" || (item.children && item.children.some(c => c.link === "/admin/transfers"))) {
+          return true;
+        }
+        // Estabelecimentos - sim (apenas visualização)
+        if (item.link === "/admin/establishments") {
+          return true;
+        }
+        // Compras - sim (suas compras)
+        if (item.link === "/admin/purchases") {
+          return true;
+        }
+        // Guia de Uso - sim
+        if (item.link === "/admin/documentation") {
+          return true;
+        }
+        // Sair - sim
+        if (item.link === "/logout") {
+          return true;
+        }
+        // Todos os outros itens são ocultos para clientes
+        return false;
+      }
+      
       // Apenas admin pode ver Merchants
       if (item.link === "/admin/merchants") {
         const shouldShow = userIsAdmin;
@@ -152,7 +188,7 @@ export function SidebarItems() {
       
       // Merchants não devem ver "Dashboard" (apenas "Meu Dashboard")
       if (item.link === "/" && item.title === "Dashboard") {
-        const shouldShow = !userIsMerchant; // Merchants não veem, apenas admins
+        const shouldShow = !userIsMerchant; // Merchants não veem, apenas admins e clientes
         if (typeof window !== "undefined") {
           console.log(`  ${shouldShow ? "✅" : "❌"} ${item.title} (${item.link}): ${shouldShow ? "VISÍVEL" : "OCULTO"} - isMerchant=${userIsMerchant}, role="${userRole}"`);
         }
@@ -179,11 +215,16 @@ export function SidebarItems() {
 
       // Admin não deve ver "Campanhas Públicas" e "Minhas Campanhas" (apenas "Campanhas")
       if (item.link === "/admin/campaigns" && item.title === "Campanhas") {
-        const shouldShow = userIsAdmin || !userIsMerchant; // Admin vê, merchant não vê
+        const shouldShow = userIsAdmin || userIsUser || !userIsMerchant; // Admin e clientes veem, merchant não vê
         if (typeof window !== "undefined") {
-          console.log(`  ${shouldShow ? "✅" : "❌"} ${item.title} (${item.link}): ${shouldShow ? "VISÍVEL" : "OCULTO"} - isAdmin=${userIsAdmin}, isMerchant=${userIsMerchant}, role="${userRole}"`);
+          console.log(`  ${shouldShow ? "✅" : "❌"} ${item.title} (${item.link}): ${shouldShow ? "VISÍVEL" : "OCULTO"} - isAdmin=${userIsAdmin}, isMerchant=${userIsMerchant}, isUser=${userIsUser}, role="${userRole}"`);
         }
         return shouldShow;
+      }
+      
+      // BCI apenas para admin
+      if (item.link === "/admin/bci") {
+        return userIsAdmin;
       }
       
       // Outros itens podem ser visíveis para admin e merchant
@@ -197,6 +238,20 @@ export function SidebarItems() {
         return {
           ...item,
           children: item.children.filter(child => {
+            // Para clientes, mostrar Meus Pontos e Transferências no submenu de Pontos
+            if (userIsUser && !userIsAdmin && !userIsMerchant) {
+              if (child.link === "/client/points" || child.link === "/admin/transfers") {
+                return true;
+              }
+              // Ocultar Gestão Pontos e Resgates para clientes
+              if (child.link === "/admin/points" || child.link === "/admin/redemptions") {
+                return false;
+              }
+            }
+            // Para admin e merchant, ocultar "Meus Pontos" (apenas para clientes)
+            if ((userIsAdmin || userIsMerchant) && child.link === "/client/points") {
+              return false;
+            }
             // Aplicar mesma lógica de filtro aos filhos
             if (child.link === "/admin/merchants" || child.link === "/admin/users") {
               return userIsAdmin;

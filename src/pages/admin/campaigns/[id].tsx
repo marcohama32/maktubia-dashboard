@@ -5,10 +5,37 @@ import { establishmentService } from "@/services/establishment.service";
 import { AlertModal } from "@/components/modals/AlertModal";
 import { ConfirmModal } from "@/components/modals/ConfirmModal";
 import { QRCodeSVG } from "qrcode.react";
+import { useAuth } from "@/contexts/AuthContext";
+import { isAdmin, isMerchant, isClient } from "@/utils/roleUtils";
+
+// Função para traduzir tipos de campanha para português
+const translateCampaignType = (type: string | undefined | null): string => {
+  if (!type) return "Não definido";
+  
+  const typeMap: { [key: string]: string } = {
+    'RewardType_Auto': 'Oferta Automática',
+    'RewardType_Draw': 'Sorteio',
+    'RewardType_Exchange': 'Troca',
+    'RewardType_Quiz': 'Questões',
+    'RewardType_Referral': 'Indicação',
+    'RewardType_Challenge': 'Desafio',
+    'RewardType_Party': 'Votação',
+    'RewardType_Voucher': 'Voucher',
+    'RewardType_Booking': 'Oferta de Desconto por Marcação',
+    'points_per_spend': 'Pontos por Compra',
+    'points': 'Pontos',
+    'vip_treatment': 'Tratamento VIP',
+    'buy_get': 'Compre e Ganhe',
+    'bonus_multiplier': 'Multiplicador de Bônus'
+  };
+  
+  return typeMap[type] || type;
+};
 
 export default function CampaignDetailsPage() {
   const router = useRouter();
   const { id } = router.query;
+  const { user } = useAuth();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [establishment, setEstablishment] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -22,6 +49,8 @@ export default function CampaignDetailsPage() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isAutoRotating, setIsAutoRotating] = useState(true);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [participations, setParticipations] = useState<any[]>([]);
+  const [loadingParticipations, setLoadingParticipations] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -109,6 +138,14 @@ export default function CampaignDetailsPage() {
           console.warn("Erro ao carregar estabelecimento:", err);
         }
       }
+      
+      // Carregar participações (códigos de reserva) se for admin ou merchant
+      if ((isAdmin(user) || isMerchant(user)) && data.participations) {
+        setParticipations(data.participations);
+      } else if (isAdmin(user) || isMerchant(user)) {
+        // Se não vier nas participações, buscar separadamente
+        loadParticipations(campaignId);
+      }
     } catch (err: any) {
       console.error("Erro ao carregar campanha:", err);
       const isNetworkError = err.isNetworkError || err.message?.includes("Servidor não disponível");
@@ -117,6 +154,19 @@ export default function CampaignDetailsPage() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadParticipations = async (campaignId: string | number) => {
+    try {
+      setLoadingParticipations(true);
+      const data = await campaignsService.getCampaignParticipations(campaignId);
+      setParticipations(data);
+    } catch (err: any) {
+      console.warn("Erro ao carregar participações:", err);
+      // Não mostrar erro, apenas não carregar participações
+    } finally {
+      setLoadingParticipations(false);
     }
   };
 
@@ -348,42 +398,47 @@ export default function CampaignDetailsPage() {
       {metrics && (
         <div className="mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Métricas da Campanha</h2>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className={`grid gap-4 ${isAdmin(user) || isMerchant(user) ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-1'}`}>
             <div className="rounded-lg bg-white p-6 shadow">
               <p className="text-sm font-medium text-gray-500">Participantes</p>
               <p className="mt-2 text-3xl font-bold text-gray-900">{metrics.totalParticipants || 0}</p>
             </div>
-          <div className="rounded-lg bg-white p-6 shadow">
-              <p className="text-sm font-medium text-gray-500">Total de Compras</p>
-              <p className="mt-2 text-3xl font-bold text-blue-600">{metrics.totalPurchases || 0}</p>
-              {metrics.confirmedPurchases !== undefined && (
-                <p className="mt-1 text-xs text-gray-500">
-                  {metrics.confirmedPurchases} confirmadas, {metrics.pendingPurchases || 0} pendentes, {metrics.rejectedPurchases || 0} rejeitadas
-                </p>
-              )}
-          </div>
-          <div className="rounded-lg bg-white p-6 shadow">
-            <p className="text-sm font-medium text-gray-500">Pontos Distribuídos</p>
-              <p className="mt-2 text-3xl font-bold text-purple-600">{(metrics.totalPointsEarned || 0).toLocaleString("pt-MZ")}</p>
-              {metrics.totalPointsEarnedConfirmed !== undefined && metrics.totalPointsEarnedConfirmed > 0 && (
-                <p className="mt-1 text-xs text-gray-500">
-                  {(metrics.totalPointsEarnedConfirmed).toLocaleString("pt-MZ")} de compras confirmadas
-                </p>
-              )}
-          </div>
-          <div className="rounded-lg bg-white p-6 shadow">
-            <p className="text-sm font-medium text-gray-500">Receita Total</p>
-            <p className="mt-2 text-3xl font-bold text-green-600">{(metrics.totalRevenue || 0).toLocaleString("pt-MZ")} MT</p>
-              {metrics.totalRevenueConfirmed !== undefined && metrics.totalRevenueConfirmed > 0 && (
-                <p className="mt-1 text-xs text-gray-500">
-                  {(metrics.totalRevenueConfirmed).toLocaleString("pt-MZ")} MT confirmada
-                </p>
-              )}
-            </div>
+            {/* Métricas sensíveis - apenas para admin e merchant */}
+            {(isAdmin(user) || isMerchant(user)) && (
+              <>
+                <div className="rounded-lg bg-white p-6 shadow">
+                  <p className="text-sm font-medium text-gray-500">Total de Compras</p>
+                  <p className="mt-2 text-3xl font-bold text-blue-600">{metrics.totalPurchases || 0}</p>
+                  {metrics.confirmedPurchases !== undefined && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {metrics.confirmedPurchases} confirmadas, {metrics.pendingPurchases || 0} pendentes, {metrics.rejectedPurchases || 0} rejeitadas
+                    </p>
+                  )}
+                </div>
+                <div className="rounded-lg bg-white p-6 shadow">
+                  <p className="text-sm font-medium text-gray-500">Pontos Distribuídos</p>
+                  <p className="mt-2 text-3xl font-bold text-purple-600">{(metrics.totalPointsEarned || 0).toLocaleString("pt-MZ")}</p>
+                  {metrics.totalPointsEarnedConfirmed !== undefined && metrics.totalPointsEarnedConfirmed > 0 && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {(metrics.totalPointsEarnedConfirmed).toLocaleString("pt-MZ")} de compras confirmadas
+                    </p>
+                  )}
+                </div>
+                <div className="rounded-lg bg-white p-6 shadow">
+                  <p className="text-sm font-medium text-gray-500">Receita Total</p>
+                  <p className="mt-2 text-3xl font-bold text-green-600">{(metrics.totalRevenue || 0).toLocaleString("pt-MZ")} MT</p>
+                  {metrics.totalRevenueConfirmed !== undefined && metrics.totalRevenueConfirmed > 0 && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {(metrics.totalRevenueConfirmed).toLocaleString("pt-MZ")} MT confirmada
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
-          {/* Métricas Detalhadas */}
-          {(metrics.avgPurchaseAmount !== undefined || metrics.maxPurchaseAmount !== undefined || metrics.avgPointsPerPurchase !== undefined) && (
+          {/* Métricas Detalhadas - apenas para admin e merchant */}
+          {(isAdmin(user) || isMerchant(user)) && (metrics.avgPurchaseAmount !== undefined || metrics.maxPurchaseAmount !== undefined || metrics.avgPointsPerPurchase !== undefined) && (
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
               {metrics.avgPurchaseAmount !== undefined && metrics.avgPurchaseAmount > 0 && (
                 <div className="rounded-lg bg-white p-4 shadow">
@@ -588,7 +643,7 @@ export default function CampaignDetailsPage() {
                 <p className="text-sm font-medium text-gray-500">Tipo de Campanha</p>
                 <div className="mt-1">
                   <span className="inline-flex rounded-full bg-blue-100 px-3 py-1 text-sm font-semibold text-blue-800">
-                    {campaign.typeLabel || campaign.type}
+                    {translateCampaignType(campaign.typeLabel || campaign.type)}
                   </span>
                   {campaign.typeDescription && (
                     <p className="mt-2 text-xs text-gray-500">{campaign.typeDescription}</p>
@@ -722,360 +777,6 @@ export default function CampaignDetailsPage() {
         </div>
       )}
 
-      {/* Campos Específicos por Tipo de Campanha */}
-      {campaign.type && (
-        <div className="mb-6 rounded-lg bg-white p-6 shadow">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Configurações Específicas</h2>
-          
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            {/* RewardType_Auto */}
-            {(campaign.type === "RewardType_Auto" || campaign.typeLabel === "Oferta Automática") && (
-              <>
-                {campaign.autoPointsAmount !== undefined && campaign.autoPointsAmount !== null && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Pontos Automáticos</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.autoPointsAmount} pts</p>
-                  </div>
-                )}
-                {campaign.autoPointsCondition && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Condição</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.autoPointsCondition}</p>
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* RewardType_Draw */}
-            {(campaign.type === "RewardType_Draw" || campaign.typeLabel === "Sorteio") && (
-              <>
-                {campaign.drawMinSpend !== undefined && campaign.drawMinSpend !== null && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Valor Mínimo para Participar</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.drawMinSpend.toLocaleString("pt-MZ")} MT</p>
-                  </div>
-                )}
-                {campaign.drawChancesPerPurchase !== undefined && campaign.drawChancesPerPurchase !== null && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Chances por Compra</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.drawChancesPerPurchase}</p>
-                  </div>
-                )}
-                {campaign.drawPrizeDescription && (
-                  <div className="md:col-span-2">
-                    <p className="text-sm font-medium text-gray-500">Descrição do Prémio</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.drawPrizeDescription}</p>
-                  </div>
-                )}
-                {campaign.drawDate && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Data do Sorteio</p>
-                    <p className="mt-1 text-sm text-gray-900">
-                      {new Date(campaign.drawDate).toLocaleDateString("pt-MZ", {
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric"
-                      })}
-                    </p>
-                  </div>
-                )}
-                {campaign.drawWinnersCount !== undefined && campaign.drawWinnersCount !== null && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Número de Ganhadores</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.drawWinnersCount}</p>
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* RewardType_Exchange */}
-            {(campaign.type === "RewardType_Exchange" || campaign.typeLabel === "Troca") && (
-              <>
-                {campaign.rewardPointsCost !== undefined && campaign.rewardPointsCost !== null && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Custo em Pontos</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.rewardPointsCost.toLocaleString("pt-MZ")} pts</p>
-                  </div>
-                )}
-                {campaign.rewardDescription && (
-                  <div className="md:col-span-2">
-                    <p className="text-sm font-medium text-gray-500">Descrição da Recompensa</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.rewardDescription}</p>
-                  </div>
-                )}
-                {campaign.rewardStock !== undefined && campaign.rewardStock !== null && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Estoque Disponível</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.rewardStock} unidades</p>
-                  </div>
-                )}
-                {campaign.rewardStockRedeemed !== undefined && campaign.rewardStockRedeemed !== null && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Estoque Resgatado</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.rewardStockRedeemed} unidades</p>
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* RewardType_Quiz */}
-            {(campaign.type === "RewardType_Quiz" || campaign.typeLabel === "Questões") && (
-              <>
-                {campaign.quizPointsPerCorrect !== undefined && campaign.quizPointsPerCorrect !== null && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Pontos por Resposta Correta</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.quizPointsPerCorrect} pts</p>
-                  </div>
-                )}
-                {campaign.quizMaxAttempts !== undefined && campaign.quizMaxAttempts !== null && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Tentativas Máximas</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.quizMaxAttempts}</p>
-                  </div>
-                )}
-                {campaign.quizTimeLimitSeconds !== undefined && campaign.quizTimeLimitSeconds !== null && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Tempo Limite</p>
-                    <p className="mt-1 text-sm text-gray-900">{Math.floor(campaign.quizTimeLimitSeconds / 60)} minutos</p>
-                  </div>
-                )}
-                {campaign.quizQuestions && (
-                  <div className="md:col-span-2">
-                    <p className="text-sm font-medium text-gray-500">Total de Questões</p>
-                    <p className="mt-1 text-sm text-gray-900">
-                      {Array.isArray(campaign.quizQuestions) ? campaign.quizQuestions.length : "N/A"} questões
-                    </p>
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* RewardType_Referral */}
-            {(campaign.type === "RewardType_Referral" || campaign.typeLabel === "Indicação") && (
-              <>
-                {campaign.referralPointsPerReferral !== undefined && campaign.referralPointsPerReferral !== null && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Pontos por Indicação</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.referralPointsPerReferral} pts</p>
-                  </div>
-                )}
-                {campaign.referralMinReferrals !== undefined && campaign.referralMinReferrals !== null && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Mínimo de Indicações</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.referralMinReferrals}</p>
-                  </div>
-                )}
-                {campaign.referralBonusPoints !== undefined && campaign.referralBonusPoints !== null && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Pontos Bônus</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.referralBonusPoints} pts</p>
-                  </div>
-                )}
-                {campaign.referralCode && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Código de Indicação</p>
-                    <p className="mt-1 text-sm text-gray-900 font-mono">{campaign.referralCode}</p>
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* RewardType_Challenge */}
-            {(campaign.type === "RewardType_Challenge" || campaign.typeLabel === "Desafio") && (
-              <>
-                {campaign.challengeObjective && (
-                  <div className="md:col-span-2">
-                    <p className="text-sm font-medium text-gray-500">Objetivo do Desafio</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.challengeObjective}</p>
-                  </div>
-                )}
-                {campaign.challengeTargetValue !== undefined && campaign.challengeTargetValue !== null && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Valor Alvo</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.challengeTargetValue}</p>
-                  </div>
-                )}
-                {campaign.challengeTargetType && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Tipo de Alvo</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.challengeTargetType}</p>
-                  </div>
-                )}
-                {campaign.challengeRewardPoints !== undefined && campaign.challengeRewardPoints !== null && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Pontos de Recompensa</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.challengeRewardPoints} pts</p>
-                  </div>
-                )}
-                {campaign.challengeBonusReward && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Recompensa Bônus</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.challengeBonusReward}</p>
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* RewardType_Party */}
-            {(campaign.type === "RewardType_Party" || campaign.typeLabel === "Votação") && (
-              <>
-                {campaign.partyPointsPerVote !== undefined && campaign.partyPointsPerVote !== null && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Pontos por Voto</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.partyPointsPerVote} pts</p>
-                  </div>
-                )}
-                {campaign.partyVotingDeadline && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Prazo de Votação</p>
-                    <p className="mt-1 text-sm text-gray-900">
-                      {new Date(campaign.partyVotingDeadline).toLocaleDateString("pt-MZ", {
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric"
-                      })}
-                    </p>
-                  </div>
-                )}
-                {campaign.partyResultsDate && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Data dos Resultados</p>
-                    <p className="mt-1 text-sm text-gray-900">
-                      {new Date(campaign.partyResultsDate).toLocaleDateString("pt-MZ", {
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric"
-                      })}
-                    </p>
-                  </div>
-                )}
-                {campaign.partyWinnerReward && (
-                  <div className="md:col-span-2">
-                    <p className="text-sm font-medium text-gray-500">Recompensa do Vencedor</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.partyWinnerReward}</p>
-                  </div>
-                )}
-                {campaign.partyVotingOptions && (
-                  <div className="md:col-span-2">
-                    <p className="text-sm font-medium text-gray-500">Opções de Votação</p>
-                    <p className="mt-1 text-sm text-gray-900">
-                      {Array.isArray(campaign.partyVotingOptions) 
-                        ? `${campaign.partyVotingOptions.length} opções`
-                        : "N/A"}
-                    </p>
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* RewardType_Voucher */}
-            {(campaign.type === "RewardType_Voucher" || campaign.typeLabel === "Voucher") && (
-              <>
-                {campaign.voucherCode && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Código do Voucher</p>
-                    <p className="mt-1 text-sm text-gray-900 font-mono">{campaign.voucherCode}</p>
-                  </div>
-                )}
-                {campaign.voucherValue !== undefined && campaign.voucherValue !== null && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Valor do Voucher</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.voucherValue.toLocaleString("pt-MZ")} MZN</p>
-                  </div>
-                )}
-                {campaign.voucherType && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Tipo</p>
-                    <p className="mt-1 text-sm text-gray-900 capitalize">{campaign.voucherType}</p>
-                  </div>
-                )}
-                {campaign.voucherCategory && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Categoria</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.voucherCategory}</p>
-                  </div>
-                )}
-                {campaign.voucherExpiryDate && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Data de Expiração</p>
-                    <p className="mt-1 text-sm text-gray-900">
-                      {new Date(campaign.voucherExpiryDate).toLocaleDateString("pt-MZ", {
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric"
-                      })}
-                    </p>
-                  </div>
-                )}
-                {campaign.voucherUsageLimit !== undefined && campaign.voucherUsageLimit !== null && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Limite de Uso</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.voucherUsageLimit} vezes</p>
-                  </div>
-                )}
-                {campaign.voucherMinPurchase !== undefined && campaign.voucherMinPurchase !== null && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Compra Mínima</p>
-                    <p className="mt-1 text-sm text-gray-900">{campaign.voucherMinPurchase.toLocaleString("pt-MZ")} MT</p>
-                  </div>
-                )}
-                {/* Tipo de Desconto - Voucher */}
-                {((campaign.voucherPercentage !== undefined && campaign.voucherPercentage !== null) || 
-                  (campaign.voucherFixedAmount !== undefined && campaign.voucherFixedAmount !== null)) && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Tipo de Desconto</p>
-                    <p className="mt-1 text-sm text-gray-900 capitalize">
-                      {campaign.voucherPercentage !== undefined && campaign.voucherPercentage !== null ? "Percentual" : "Fixo"}
-                    </p>
-                  </div>
-                )}
-                {campaign.voucherPercentage !== undefined && campaign.voucherPercentage !== null && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Valor do Desconto (Percentual)</p>
-                    <p className="mt-1 text-sm text-gray-900">
-                      {campaign.voucherPercentage}%
-                    </p>
-                  </div>
-                )}
-                {campaign.voucherFixedAmount !== undefined && campaign.voucherFixedAmount !== null && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Valor do Desconto (Fixo)</p>
-                    <p className="mt-1 text-sm text-gray-900">
-                      {campaign.voucherFixedAmount.toLocaleString("pt-MZ")} MT
-                    </p>
-                  </div>
-                )}
-                {(campaign.voucherSingleUse !== undefined || campaign.voucherRequiresCode !== undefined) && (
-                  <div className="md:col-span-2 flex gap-4">
-                    {campaign.voucherSingleUse !== undefined && (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={campaign.voucherSingleUse || false}
-                          disabled
-                          className="h-4 w-4 rounded border-gray-300 text-blue-600"
-                        />
-                        <span className="text-sm text-gray-700">Uso Único</span>
-                      </div>
-                    )}
-                    {campaign.voucherRequiresCode !== undefined && (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={campaign.voucherRequiresCode || false}
-                          disabled
-                          className="h-4 w-4 rounded border-gray-300 text-blue-600"
-                        />
-                        <span className="text-sm text-gray-700">Código Obrigatório</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Outras Configurações */}
       {(campaign.vipOnly !== undefined || campaign.newCustomersOnly !== undefined || campaign.communicationBudget !== undefined) && (
@@ -1112,6 +813,159 @@ export default function CampaignDetailsPage() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Códigos de Reserva Gerados - apenas para admin e merchant */}
+      {(isAdmin(user) || isMerchant(user)) && (
+        <div className="mb-6 rounded-lg bg-white p-6 shadow">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Códigos de Reserva Gerados
+              {campaign.participationsCount !== undefined && campaign.participationsCount > 0 && (
+                <span className="ml-2 text-sm font-normal text-gray-500">
+                  ({campaign.participationsCount} total)
+                </span>
+              )}
+            </h2>
+            <button
+              onClick={() => loadParticipations(campaign.campaign_id || campaign.id || "")}
+              disabled={loadingParticipations}
+              className="text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50"
+            >
+              {loadingParticipations ? "Carregando..." : "Atualizar"}
+            </button>
+          </div>
+
+          {loadingParticipations ? (
+            <div className="text-center py-8">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
+              <p className="mt-2 text-sm text-gray-500">Carregando códigos...</p>
+            </div>
+          ) : participations.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <p className="text-sm">Nenhum código de reserva gerado ainda</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Código de Reserva
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Cliente
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Data de Criação
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Válido até
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Ações
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {participations.map((participation) => (
+                    <tr key={participation.participationId} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <code className="text-sm font-mono font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded border border-blue-200">
+                            {participation.reservationCode}
+                          </code>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(participation.reservationCode);
+                              setAlertConfig({
+                                title: "Copiado!",
+                                message: "Código copiado para a área de transferência",
+                                type: "success",
+                              });
+                              setAlertModalOpen(true);
+                            }}
+                            className="text-blue-600 hover:text-blue-900"
+                            title="Copiar código"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {participation.user ? (
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">{participation.user.name || participation.user.username}</p>
+                            {participation.user.email && (
+                              <p className="text-xs text-gray-500">{participation.user.email}</p>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-400">N/A</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          participation.status === 'used'
+                            ? "bg-gray-100 text-gray-800"
+                            : participation.isValid
+                            ? "bg-green-100 text-green-800"
+                            : "bg-red-100 text-red-800"
+                        }`}>
+                          {participation.status === 'used' ? 'Usado' : participation.isValid ? 'Válido' : 'Expirado'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                        {participation.createdAt ? new Date(participation.createdAt).toLocaleString("pt-MZ") : "N/A"}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                        {participation.expiresAt ? new Date(participation.expiresAt).toLocaleString("pt-MZ") : "Sem expiração"}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm">
+                        {participation.status !== 'used' && participation.isValid && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                await campaignsService.validateReservationCode(participation.reservationCode);
+                                setAlertConfig({
+                                  title: "Sucesso!",
+                                  message: "Código validado e marcado como usado",
+                                  type: "success",
+                                });
+                                setAlertModalOpen(true);
+                                // Recarregar participações
+                                await loadParticipations(campaign.campaign_id || campaign.id || "");
+                              } catch (err: any) {
+                                setAlertConfig({
+                                  title: "Erro!",
+                                  message: err.message || "Erro ao validar código",
+                                  type: "error",
+                                });
+                                setAlertModalOpen(true);
+                              }
+                            }}
+                            className="text-green-600 hover:text-green-900 font-medium"
+                            title="Validar código"
+                          >
+                            Validar
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

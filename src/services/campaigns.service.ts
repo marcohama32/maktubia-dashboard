@@ -187,6 +187,28 @@ export interface Campaign {
     minPurchaseAmount?: number;
     avgPointsPerPurchase?: number;
   } | null;
+  // Participações e códigos de reserva
+  participationsCount?: number;
+  participations?: Array<{
+    participationId: number;
+    reservationCode: string;
+    status: string;
+    isValid: boolean;
+    user: {
+      userId: number;
+      username: string;
+      email: string;
+      name: string;
+      phone?: string;
+    } | null;
+    createdAt: string;
+    usedAt: string | null;
+    expiresAt: string | null;
+  }>;
+  // Participação do usuário atual (se for cliente)
+  userReservationCode?: string | null;
+  userParticipationStatus?: string | null;
+  hasParticipated?: boolean;
   quizMetrics?: {
     totalParticipants?: number;
     totalAttempts?: number;
@@ -233,7 +255,7 @@ export interface CampaignsResponse {
 }
 
 export interface CreateCampaignDTO {
-  establishment_id: number;
+  establishment_id: number | string;
   // Campos base obrigatórios (CR#3)
   campaign_name: string;
   valid_from: string;
@@ -281,6 +303,9 @@ export interface CreateCampaignDTO {
   start_date?: string; // Mapeado para valid_from
   end_date?: string; // Mapeado para valid_until
   is_active?: boolean;
+  // Campos específicos para campanha automática
+  benefit_description?: string;
+  required_quantity?: number;
   // Novos campos por tipo (CR#3)
   draw_periodicity?: "daily" | "weekly" | "monthly" | "event";
   draw_points_per_participation?: number;
@@ -1088,6 +1113,194 @@ export const campaignsService = {
    */
   async deactivate(id: number | string): Promise<Campaign> {
     return this.changeStatus(id, { status: "inactive" });
+  },
+
+  /**
+   * Participar de uma campanha (gerar código de reserva)
+   * POST /api/campaigns/:id/participate
+   */
+  async participate(campaignId: number | string): Promise<{
+    participationId: number;
+    campaignId: string | number;
+    campaignType: string;
+    campaignDescription: string;
+    reservationCode: string;
+    status: string;
+    expiresAt: string | null;
+    createdAt: string;
+  }> {
+    try {
+      const response = await api.post(`/campaigns/${campaignId}/participate`);
+      
+      return response.data?.data || response.data;
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao participar da campanha";
+      
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 400) {
+        message = data?.message || data?.error || "Não foi possível participar da campanha";
+      } else if (_status === 403) {
+        message = data?.message || data?.error || "Acesso negado. Apenas clientes podem participar de campanhas.";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      const error = new Error(message);
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Listar minhas participações
+   * GET /api/campaigns/my/participations
+   */
+  async getMyParticipations(): Promise<{
+    participationId: number;
+    campaignId: string | number;
+    reservationCode: string;
+    status: string;
+    isValid: boolean;
+    campaign: {
+      type: string;
+      description: string;
+      validUntil: string | null;
+    };
+    establishment: {
+      name: string;
+      type: string;
+    } | null;
+    createdAt: string;
+    usedAt: string | null;
+    expiresAt: string | null;
+  }[]> {
+    try {
+      const response = await api.get("/campaigns/my/participations");
+      
+      return response.data?.data || [];
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao buscar participações";
+      
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 401) {
+        message = "Não autorizado. Por favor, faça login novamente.";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      const error = new Error(message);
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Validar código de reserva
+   * POST /api/campaigns/validate-reservation
+   */
+  async validateReservationCode(code: string): Promise<{
+    participationId: number;
+    campaignId: string | number;
+    campaignType: string;
+    campaignDescription: string;
+    reservationCode: string;
+    status: string;
+    usedAt: Date;
+  }> {
+    try {
+      const response = await api.post("/campaigns/validate-reservation", { code });
+      
+      return response.data?.data || response.data;
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao validar código de reserva";
+      
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 400) {
+        message = data?.message || data?.error || "Código de reserva inválido ou expirado";
+      } else if (_status === 404) {
+        message = data?.message || data?.error || "Código de reserva não encontrado";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      const error = new Error(message);
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Buscar participações de uma campanha (códigos de reserva)
+   * GET /api/campaigns/:id/participations
+   */
+  async getCampaignParticipations(campaignId: number | string): Promise<{
+    participationId: number;
+    reservationCode: string;
+    status: string;
+    isValid: boolean;
+    user: {
+      userId: number;
+      username: string;
+      email: string;
+      name: string;
+      phone?: string;
+    } | null;
+    createdAt: string;
+    usedAt: string | null;
+    expiresAt: string | null;
+  }[]> {
+    try {
+      const response = await api.get(`/campaigns/${campaignId}/participations`);
+      
+      return response.data?.data || [];
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao buscar participações da campanha";
+      
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 403) {
+        message = data?.message || data?.error || "Acesso negado. Apenas administradores e merchants podem ver participações.";
+      } else if (_status === 404) {
+        message = data?.message || data?.error || "Campanha não encontrada";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      const error = new Error(message);
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
+    }
   },
 };
 

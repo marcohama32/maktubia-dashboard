@@ -95,10 +95,24 @@ export function isUser(user: User | null): boolean {
   if (!user) return false;
   
   const roleName = getUserRole(user);
-  const userVariations = ["user", "usuário", "usuario", "cliente", "customer"];
+  const userVariations = ["user", "usuário", "usuario", "cliente", "customer", "client", "users"];
+  
+  // Debug: logar verificação de user
+  if (typeof window !== "undefined") {
+    console.log("🔍 [ROLE] Verificando se é user/cliente:", {
+      roleName,
+      isUser: userVariations.includes(roleName),
+      userObject: user
+    });
+  }
   
   return userVariations.includes(roleName);
 }
+
+/**
+ * Alias para isUser - verifica se o usuário é cliente
+ */
+export const isClient = isUser;
 
 /**
  * Verifica se o usuário tem acesso (admin ou merchant)

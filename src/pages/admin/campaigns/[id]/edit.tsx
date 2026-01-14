@@ -95,6 +95,9 @@ export default function EditCampaignPage() {
     booking_service_types?: string[];
     booking_points_earned?: number;
     booking_confirmation_required?: boolean;
+    // Campos para RewardType_Auto
+    benefit_description?: string;
+    required_quantity?: number;
   }>({
     campaign_name: "",
     sponsor_name: "",
@@ -113,6 +116,8 @@ export default function EditCampaignPage() {
     reward_points_cost: undefined,
     reward_description: undefined,
     reward_stock: undefined,
+    benefit_description: undefined,
+    required_quantity: undefined,
   });
 
   useEffect(() => {
@@ -822,22 +827,6 @@ export default function EditCampaignPage() {
               <p className="mt-1 text-xs text-gray-500">Deixe vazio para usar a taxa padrão (1 MT = 10 pts)</p>
             </div>
 
-            <div>
-              <label htmlFor="bonus_multiplier" className="block text-sm font-medium text-gray-700 mb-2">
-                Multiplicador de Bônus
-              </label>
-              <input
-                type="number"
-                id="bonus_multiplier"
-                name="bonus_multiplier"
-                value={formData.bonus_multiplier ?? ""}
-                onChange={handleChange}
-                min="1"
-                step="0.1"
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
-                placeholder="Ex: 2.0"
-              />
-            </div>
 
             <div>
               <label htmlFor="total_points_limit" className="block text-sm font-medium text-gray-700 mb-2">

@@ -19,7 +19,7 @@ export default function MerchantDetailsPage() {
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [alertConfig, setAlertConfig] = useState<{ title: string; message: string; type: "success" | "error" | "warning" | "info" } | null>(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
-  const [actionType, setActionType] = useState<"delete" | "grantCampaign" | "revokeCampaign" | "grantCustomPoints" | "revokeCustomPoints" | "activate" | "deactivate">("delete");
+  const [actionType, setActionType] = useState<"delete" | "activate" | "deactivate">("delete");
 
   useEffect(() => {
     if (user && !isAdmin(user)) {
@@ -87,30 +87,6 @@ export default function MerchantDetailsPage() {
           setTimeout(() => {
             router.push("/admin/merchants");
           }, 2000);
-          break;
-
-        case "grantCampaign":
-          await merchantsService.grantCampaignPermission(merchant.merchant_id);
-          message = "Permissão de criar campanhas concedida!";
-          await loadMerchant(merchant.merchant_id);
-          break;
-
-        case "revokeCampaign":
-          await merchantsService.revokeCampaignPermission(merchant.merchant_id);
-          message = "Permissão de criar campanhas revogada!";
-          await loadMerchant(merchant.merchant_id);
-          break;
-
-        case "grantCustomPoints":
-          await merchantsService.grantCustomPointsPermission(merchant.merchant_id);
-          message = "Permissão de definir pontos personalizados concedida!";
-          await loadMerchant(merchant.merchant_id);
-          break;
-
-        case "revokeCustomPoints":
-          await merchantsService.revokeCustomPointsPermission(merchant.merchant_id);
-          message = "Permissão de definir pontos personalizados revogada!";
-          await loadMerchant(merchant.merchant_id);
           break;
 
         case "activate":
@@ -225,13 +201,6 @@ export default function MerchantDetailsPage() {
   
   const userEmail = merchantUser?.email || "";
   const userPhone = merchantUser?.phone || "";
-  
-  const canCreateCampaigns = merchant.can_create_campaigns || 
-    (merchantUser?.permissions?.can_create_campaigns) || 
-    false;
-  const canSetCustomPoints = merchant.can_set_custom_points || 
-    (merchantUser?.permissions?.can_set_custom_points) || 
-    false;
   
   const isActive = merchant.is_active !== false;
 
@@ -355,93 +324,6 @@ export default function MerchantDetailsPage() {
             </div>
           )}
 
-          {/* Permissões */}
-          <div className="mb-6 border-t border-gray-200 pt-6">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900">Permissões</h2>
-              <div className="flex gap-2">
-                {canCreateCampaigns ? (
-                  <button
-                    onClick={() => handleAction("revokeCampaign")}
-                    disabled={actionLoading}
-                    className="rounded-lg bg-red-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
-                  >
-                    Revogar Campanhas
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleAction("grantCampaign")}
-                    disabled={actionLoading}
-                    className="rounded-lg bg-green-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
-                  >
-                    Conceder Campanhas
-                  </button>
-                )}
-                {canSetCustomPoints ? (
-                  <button
-                    onClick={() => handleAction("revokeCustomPoints")}
-                    disabled={actionLoading}
-                    className="rounded-lg bg-red-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
-                  >
-                    Revogar Pontos
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleAction("grantCustomPoints")}
-                    disabled={actionLoading}
-                    className="rounded-lg bg-green-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
-                  >
-                    Conceder Pontos
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4">
-                <div className="flex items-center gap-3">
-                  {canCreateCampaigns ? (
-                    <svg className="h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : (
-                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  )}
-                  <span className="font-medium text-gray-900">Pode criar campanhas</span>
-                </div>
-                <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                  canCreateCampaigns
-                    ? "bg-green-100 text-green-800"
-                    : "bg-gray-100 text-gray-800"
-                }`}>
-                  {canCreateCampaigns ? "Sim" : "Não"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4">
-                <div className="flex items-center gap-3">
-                  {canSetCustomPoints ? (
-                    <svg className="h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : (
-                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  )}
-                  <span className="font-medium text-gray-900">Pode definir pontos personalizados</span>
-                </div>
-                <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                  canSetCustomPoints
-                    ? "bg-green-100 text-green-800"
-                    : "bg-gray-100 text-gray-800"
-                }`}>
-                  {canSetCustomPoints ? "Sim" : "Não"}
-                </span>
-              </div>
-            </div>
-          </div>
-
           {/* Ações */}
           <div className="mb-6 border-t border-gray-200 pt-6">
             <h2 className="mb-4 text-xl font-semibold text-gray-900">Ações</h2>
@@ -530,19 +412,11 @@ export default function MerchantDetailsPage() {
         onConfirm={handleActionConfirm}
         title={
           actionType === "delete" ? "Confirmar Exclusão" :
-          actionType === "grantCampaign" ? "Conceder Permissão" :
-          actionType === "revokeCampaign" ? "Revogar Permissão" :
-          actionType === "grantCustomPoints" ? "Conceder Permissão" :
-          actionType === "revokeCustomPoints" ? "Revogar Permissão" :
           actionType === "activate" ? "Ativar Merchant" :
           "Desativar Merchant"
         }
         message={
           actionType === "delete" ? `Tem certeza que deseja deletar o merchant "${userName}"? Esta ação não pode ser desfeita.` :
-          actionType === "grantCampaign" ? `Tem certeza que deseja conceder permissão para criar campanhas ao merchant "${userName}"?` :
-          actionType === "revokeCampaign" ? `Tem certeza que deseja revogar a permissão de criar campanhas do merchant "${userName}"?` :
-          actionType === "grantCustomPoints" ? `Tem certeza que deseja conceder permissão para definir pontos personalizados ao merchant "${userName}"?` :
-          actionType === "revokeCustomPoints" ? `Tem certeza que deseja revogar a permissão de definir pontos personalizados do merchant "${userName}"?` :
           actionType === "activate" ? `Tem certeza que deseja ativar o merchant "${userName}"?` :
           `Tem certeza que deseja desativar o merchant "${userName}"?`
         }

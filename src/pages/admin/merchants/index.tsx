@@ -107,14 +107,13 @@ function MerchantsPageContent() {
       setLoading(true);
       setError("");
       
-      // Se houver filtros ativos (establishmentFilter, userFilter, searchTerm), buscar mais dados
-      // para aplicar paginação no frontend após filtrar
+      // Sempre buscar todos os merchants (sem paginação no backend)
       const hasFilters = establishmentFilter || userFilter || searchTerm;
-      const params: GetAllMerchantsParams = {
-        // Se houver filtros, buscar mais dados para filtrar no frontend
-        // Caso contrário, usar paginação do backend
-        page: hasFilters ? 1 : currentPage,
-        limit: hasFilters ? 1000 : ITEMS_PER_PAGE, // Buscar mais dados se houver filtros
+      const params: GetAllMerchantsParams & { all?: boolean } = {
+        // Buscar todos os merchants sempre
+        page: 1,
+        limit: 0, // 0 ou usar parâmetro 'all' para buscar todos
+        all: true, // Parâmetro para buscar todos
         is_active: statusFilter === "active" ? true : statusFilter === "inactive" ? false : undefined,
       };
       const response = await merchantsService.getAll(params);
@@ -123,16 +122,18 @@ function MerchantsPageContent() {
       
       // A estrutura retornada é: estabelecimentos com users[] (merchants alocados)
       // Cada item tem: id (establishment_id) ou establishment_id, name, type, users[], campaigns[]
+      // MANTER a estrutura agrupada por estabelecimento (não achatar)
       merchantsData = merchantsData.map((establishment: any) => {
-        // O id pode vir como 'id' ou 'establishment_id'
-        const establishmentId = establishment.id || establishment.establishment_id;
+        // O id pode vir como 'id' ou 'establishment_id' ou 'establishmentId'
+        const establishmentId = establishment.id || establishment.establishment_id || establishment.establishmentId;
+        const establishmentData = establishment.establishment || establishment;
         
         // Processar users (merchants alocados)
         // A API retorna users com: id, username, email, firstName, lastName, fullName, phone, isActive, permissions, createdAt
         const processedUsers = (establishment.users || []).map((u: any) => ({
           // IDs: user_id é o id do user, merchant_id/merchant_user_id não vêm na resposta inicial
-          user_id: u.id,
-          id: u.id, // Manter id também para compatibilidade
+          user_id: u.id || u.user_id,
+          id: u.id || u.user_id, // Manter id também para compatibilidade
           // Dados do usuário
           username: u.username || "",
           email: u.email || "",
@@ -162,8 +163,8 @@ function MerchantsPageContent() {
           createdAt: u.createdAt || u.created_at,
           created_at: u.createdAt || u.created_at,
           // merchant_id e merchant_user_id serão buscados quando necessário (não vêm na resposta inicial)
-          merchant_id: u.merchant_id || u.merchant_user_id || undefined,
-          merchant_user_id: u.merchant_user_id || u.merchant_id || undefined,
+          merchant_id: u.merchantId || u.merchant_id || u.merchant_user_id || undefined,
+          merchant_user_id: u.merchant_user_id || u.merchantId || u.merchant_id || undefined,
         }));
         
         return {
@@ -172,11 +173,11 @@ function MerchantsPageContent() {
           establishment_id: establishmentId,
           merchant_id: establishmentId, // Para compatibilidade
           // Dados do estabelecimento
-          name: establishment.name,
-          type: establishment.type,
-          address: establishment.address,
-          phone: establishment.phone,
-          email: establishment.email,
+          name: establishmentData.name || establishment.name,
+          type: establishmentData.type || establishment.type,
+          address: establishmentData.address || establishment.address,
+          phone: establishmentData.phone || establishment.phone,
+          email: establishmentData.email || establishment.email,
           image: establishment.image,
           imageUrl: establishment.imageUrl || establishment.image_url,
           qrCode: establishment.qrCode || establishment.qr_code,
@@ -187,7 +188,7 @@ function MerchantsPageContent() {
           created_at: establishment.createdAt || establishment.created_at,
           updatedAt: establishment.updatedAt || establishment.updated_at,
           updated_at: establishment.updatedAt || establishment.updated_at,
-          // Users (merchants alocados)
+          // Users (merchants alocados) - TODOS os merchants deste estabelecimento
           users: processedUsers,
           // Campanhas
           campaigns: establishment.campaigns || [],
@@ -235,36 +236,30 @@ function MerchantsPageContent() {
       
       // Filtrar apenas merchants com IDs válidos antes de definir no estado
       const validMerchants = merchantsData.filter((m: any) => {
-        // Garantir que tem id válido (establishment_id)
-        const hasValidId = (m.id && !isNaN(m.id)) || 
-                          (m.establishment_id && !isNaN(m.establishment_id));
+        // Garantir que tem id válido (establishment_id) - pode ser número ou string não vazia
+        const id = m.id || m.establishment_id || m.merchant_id;
+        const hasValidId = id !== null && id !== undefined && id !== '';
         if (!hasValidId) {
           console.warn("Merchant sem ID válido filtrado:", m);
         }
         return hasValidId;
       });
       
-      // Se houver filtros ativos, aplicar paginação no frontend (hasFilters já foi definido acima)
-      let paginatedMerchants = validMerchants;
-      let frontendPagination = null;
+      // Aplicar paginação no frontend sempre (já que buscamos todos do backend)
+      const totalItems = validMerchants.length;
+      const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+      const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+      const endIndex = startIndex + ITEMS_PER_PAGE;
+      const paginatedMerchants = validMerchants.slice(startIndex, endIndex);
       
-      if (hasFilters) {
-        // Calcular paginação no frontend
-        const totalItems = validMerchants.length;
-        const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
-        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-        const endIndex = startIndex + ITEMS_PER_PAGE;
-        paginatedMerchants = validMerchants.slice(startIndex, endIndex);
-        
-        frontendPagination = {
-          page: currentPage,
-          limit: ITEMS_PER_PAGE,
-          total: totalItems,
-          totalPages: totalPages,
-          hasNextPage: currentPage < totalPages,
-          hasPrevPage: currentPage > 1,
-        };
-      }
+      const frontendPagination = {
+        page: currentPage,
+        limit: ITEMS_PER_PAGE,
+        total: totalItems,
+        totalPages: totalPages,
+        hasNextPage: currentPage < totalPages,
+        hasPrevPage: currentPage > 1,
+      };
       
       setMerchants(paginatedMerchants);
       
@@ -295,8 +290,8 @@ function MerchantsPageContent() {
         }, 0),
       });
       
-      // Usar paginação do frontend se houver filtros, caso contrário usar do backend
-      setPagination(hasFilters ? frontendPagination : response.pagination);
+      // Usar paginação do frontend (já que buscamos todos do backend)
+      setPagination(frontendPagination);
     } catch (err: any) {
       console.error("Erro ao carregar merchants:", err);
       const isNetworkError = err.isNetworkError || err.message?.includes("Servidor não disponível");
@@ -473,8 +468,8 @@ function MerchantsPageContent() {
     setMerchantToAction(null);
   };
 
-  const handleView = (id: number) => {
-    if (!id || isNaN(id)) {
+  const handleView = (id: number | string) => {
+    if (!id || id === '' || id === null || id === undefined) {
       console.error("ID inválido para visualizar:", id);
       return;
     }
@@ -483,9 +478,9 @@ function MerchantsPageContent() {
   };
 
   const handleEdit = (merchant: Merchant) => {
-    // O id é o establishment_id
+    // O id é o establishment_id (pode ser número ou string alfanumérica)
     const merchantId = merchant.id || merchant.establishment_id || merchant.merchant_id;
-    if (!merchantId || isNaN(merchantId)) {
+    if (!merchantId || merchantId === '' || merchantId === null || merchantId === undefined) {
       console.error("Merchant ID inválido para editar:", merchant);
       setAlertConfig({
         title: "Erro!",
@@ -500,9 +495,9 @@ function MerchantsPageContent() {
   };
 
   const handleViewCampaigns = (merchant: Merchant) => {
-    // O id é o establishment_id
+    // O id é o establishment_id (pode ser número ou string alfanumérica)
     const establishmentId = merchant.id || merchant.establishment_id || merchant.merchant_id;
-    if (!establishmentId || isNaN(establishmentId)) {
+    if (!establishmentId || establishmentId === '' || establishmentId === null || establishmentId === undefined) {
       console.error("ID inválido para ver campanhas:", merchant);
       setAlertConfig({
         title: "Erro!",
@@ -516,9 +511,9 @@ function MerchantsPageContent() {
   };
 
   const handleAddUser = (merchant: Merchant) => {
-    // O id é o establishment_id
+    // O id é o establishment_id (pode ser número ou string alfanumérica)
     const establishmentId = merchant.id || merchant.establishment_id || merchant.merchant_id;
-    if (!establishmentId || isNaN(establishmentId)) {
+    if (!establishmentId || establishmentId === '' || establishmentId === null || establishmentId === undefined) {
       console.error("Merchant ID inválido para adicionar usuário:", merchant);
       setAlertConfig({
         title: "Erro!",
@@ -886,27 +881,24 @@ function MerchantsPageContent() {
       )}
 
       {/* Tabela de Merchants */}
-      <div className="overflow-hidden rounded-lg bg-white shadow">
+      <div className="overflow-hidden rounded-xl bg-white shadow-lg border border-gray-200">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Usuário
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Estabelecimento
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Permissões
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Data de Criação
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Ações
                 </th>
               </tr>
@@ -914,8 +906,20 @@ function MerchantsPageContent() {
             <tbody className="divide-y divide-gray-200 bg-white">
               {merchants.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
-                    {loading ? "Carregando..." : "Nenhum merchant encontrado"}
+                  <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                    {loading ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
+                        <span>Carregando merchants...</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <svg className="h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                        </svg>
+                        <span className="text-lg font-medium">Nenhum merchant encontrado</span>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -951,40 +955,79 @@ function MerchantsPageContent() {
                   }
                   
                   // Garantir que merchant tem ID válido antes de renderizar
-                  // O id é o establishment_id
+                  // O id é o establishment_id (pode ser número ou string alfanumérica)
                   const merchantId = merchant.id || merchant.establishment_id || merchant.merchant_id;
-                  if (!merchantId || isNaN(merchantId)) {
+                  if (!merchantId || merchantId === '' || merchantId === null || merchantId === undefined) {
                     console.warn("Merchant sem ID válido, pulando renderização:", merchant);
                     return null;
                   }
                   
                   // Verificar se o usuário é admin para habilitar botões
-                  const canEdit = userIsAdmin && merchantId && !isNaN(merchantId);
+                  const canEdit = userIsAdmin && merchantId;
                   
                   return (
-                    <tr key={merchantId} className="hover:bg-gray-50">
-                      <td className="whitespace-nowrap px-6 py-4">
+                    <tr key={merchantId} className="hover:bg-blue-50 transition-colors duration-150 border-b border-gray-100">
+                      <td className="px-6 py-5">
                         <div className="flex items-center">
                           <div className="w-full">
                             {merchantUsers.length > 0 ? (
-                              <div className="space-y-2">
+                              <div className="space-y-3">
                                 {merchantUsers.map((u: any, index: number) => {
                                   const fullName = u.fullName || 
                                                    `${u.firstName || u.first_name || ""} ${u.lastName || u.last_name || ""}`.trim() || 
                                                    u.username || 
                                                    (u.user_id ? `ID: ${u.user_id}` : "Sem nome");
                                   return (
-                                    <div key={u.merchant_user_id || u.user_id || index} className="border-l-2 border-blue-200 pl-2 py-1">
-                                      <div className="text-sm font-medium text-gray-900">{fullName}</div>
-                                      {u.email && (
-                                        <div className="text-xs text-gray-500">{u.email}</div>
-                                      )}
-                                      {u.phone && (
-                                        <div className="text-xs text-gray-400">{u.phone}</div>
-                                      )}
+                                    <div key={u.merchant_user_id || u.user_id || index} className="flex items-start gap-3 p-2 rounded-lg bg-white border border-gray-200 hover:border-blue-300 transition-colors">
+                                      <div className="flex-shrink-0 mt-1">
+                                        <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-semibold text-sm">
+                                          {fullName.charAt(0).toUpperCase()}
+                                        </div>
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-sm font-semibold text-gray-900 truncate">{fullName}</div>
+                                        {u.email && (
+                                          <div className="text-xs text-gray-600 mt-0.5 truncate flex items-center gap-1">
+                                            <svg className="h-3 w-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                            </svg>
+                                            {u.email}
+                                          </div>
+                                        )}
+                                        {u.phone && (
+                                          <div className="text-xs text-gray-500 mt-0.5 truncate flex items-center gap-1">
+                                            <svg className="h-3 w-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                            </svg>
+                                            {u.phone}
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
                                   );
                                 })}
+                                {canEdit && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      if (merchantId && merchantId !== '' && merchantId !== null && merchantId !== undefined) {
+                                        handleAddUser(merchant);
+                                      } else {
+                                        console.error("Merchant ID inválido para adicionar usuário:", merchant);
+                                      }
+                                    }}
+                                    disabled={!canEdit || !merchantId}
+                                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border-2 border-dashed border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Adicionar outro merchant"
+                                  >
+                                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                    </svg>
+                                    <span className="text-sm font-medium">Adicionar Merchant</span>
+                                  </button>
+                                )}
                               </div>
                             ) : (
                               <div className="flex items-center gap-2">
@@ -995,7 +1038,7 @@ function MerchantsPageContent() {
                                     e.preventDefault();
                                     e.stopPropagation();
                                     // Usar o merchantId já calculado
-                                    if (merchantId && !isNaN(merchantId)) {
+                                    if (merchantId && merchantId !== '' && merchantId !== null && merchantId !== undefined) {
                                       handleAddUser(merchant);
                                     } else {
                                       console.error("Merchant ID inválido para adicionar usuário:", merchant);
@@ -1012,223 +1055,116 @@ function MerchantsPageContent() {
                           </div>
                         </div>
                     </td>
-                    <td className="whitespace-nowrap px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1">
-                          {merchantName ? (
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1">
-                                <div className="text-sm text-gray-900">
-                                  {merchantName}
-                                </div>
-                                {merchantType && (
-                                  <div className="text-xs text-gray-500">
-                                    {merchantType}
-                                  </div>
-                                )}
-                                {merchant.campaigns !== undefined && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      const establishmentId = merchant.establishment_id || merchant.merchant_id;
-                                      if (establishmentId && !isNaN(establishmentId)) {
-                                        handleViewCampaigns(merchant);
-                                      } else {
-                                        console.error("ID inválido para ver campanhas:", merchant);
-                                      }
-                                    }}
-                                    disabled={!canEdit || !merchantId}
-                                    className="text-xs text-blue-600 hover:text-blue-800 underline mt-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                                    title="Ver campanhas deste estabelecimento"
-                                  >
-                                    {merchant.campaigns?.length || 0} campanha{(merchant.campaigns?.length || 0) !== 1 ? "s" : ""}
-                                  </button>
-                                )}
+                    <td className="px-6 py-5">
+                      <div className="flex items-start gap-3">
+                        {merchantName ? (
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <div className="h-2 w-2 rounded-full bg-green-500"></div>
+                              <div className="text-sm font-semibold text-gray-900">
+                                {merchantName}
                               </div>
-                              {canEdit && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    if (merchantId && !isNaN(merchantId)) {
-                                      handleAddEstablishmentToMerchant(merchant);
-                                    }
-                                  }}
-                                  disabled={!canEdit || addEstablishmentLoading}
-                                  className="text-xs text-blue-600 hover:text-blue-800 underline disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title="Adicionar estabelecimento"
-                                >
-                                  + Adicionar
-                                </button>
-                              )}
                             </div>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm text-gray-500">Sem estabelecimento</span>
+                            {merchantType && (
+                              <div className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-700 mb-2">
+                                {merchantType}
+                              </div>
+                            )}
+                            {merchant.campaigns !== undefined && (
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
-                                  if (merchantId && !isNaN(merchantId)) {
+                                  const establishmentId = merchant.establishment_id || merchant.merchant_id;
+                                  if (establishmentId && establishmentId !== '' && establishmentId !== null && establishmentId !== undefined) {
+                                    handleViewCampaigns(merchant);
+                                  } else {
+                                    console.error("ID inválido para ver campanhas:", merchant);
+                                  }
+                                }}
+                                disabled={!canEdit || !merchantId}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Ver campanhas deste estabelecimento"
+                              >
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                </svg>
+                                {merchant.campaigns?.length || 0} campanha{(merchant.campaigns?.length || 0) !== 1 ? "s" : ""}
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 border border-gray-200">
+                            <span className="text-sm text-gray-500">Sem estabelecimento</span>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  if (merchantId && merchantId !== '' && merchantId !== null && merchantId !== undefined) {
                                     handleAddEstablishmentToMerchant(merchant);
                                   } else {
                                     console.error("Merchant ID inválido para adicionar estabelecimento:", merchant);
                                   }
                                 }}
-                                disabled={!canEdit || !merchantId}
+                                disabled={!canEdit || !merchantId || addEstablishmentLoading}
                                 className="text-xs text-blue-600 hover:text-blue-800 underline disabled:opacity-50 disabled:cursor-not-allowed"
                                 title="Adicionar estabelecimento"
                               >
                                 + Adicionar
                               </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="space-y-2">
-                        {merchantUsers.length > 0 ? (
-                          merchantUsers.map((user: any, index: number) => {
-                            const fullName = user.fullName || 
-                                             `${user.firstName || user.first_name || ""} ${user.lastName || user.last_name || ""}`.trim() || 
-                                             user.username || 
-                                             (user.user_id ? `ID: ${user.user_id}` : "Sem nome");
-                            return (
-                              <div key={user.merchant_user_id || user.user_id || index} className="border-l-2 border-purple-200 pl-2 py-1 bg-gray-50 rounded">
-                                <div className="text-xs font-medium text-gray-700 mb-1">{fullName}</div>
-                                <div className="flex flex-wrap gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      const hasPermission = user.permissions?.canCreateCampaigns || user.permissions?.can_create_campaigns || false;
-                                      handlePermissionClick(
-                                        merchant,
-                                        hasPermission ? "revokeCampaign" : "grantCampaign",
-                                        user.user_id || user.id
-                                      );
-                                    }}
-                                    disabled={!canEdit || actionLoading === merchantId}
-                                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium transition-colors ${
-                                      (user.permissions?.canCreateCampaigns || user.permissions?.can_create_campaigns) === true
-                                        ? "bg-green-100 text-green-800 hover:bg-green-200"
-                                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                                    } disabled:opacity-50 disabled:cursor-not-allowed`}
-                                    title={`${fullName}: ${(user.permissions?.canCreateCampaigns || user.permissions?.can_create_campaigns) === true ? "Revogar" : "Conceder"} permissão de campanhas`}
-                                  >
-                                    {(user.permissions?.canCreateCampaigns || user.permissions?.can_create_campaigns) === true ? "✓" : "✗"} Campanhas
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      const hasPermission = user.permissions?.canSetCustomPoints || user.permissions?.can_set_custom_points || false;
-                                      handlePermissionClick(
-                                        merchant,
-                                        hasPermission ? "revokeCustomPoints" : "grantCustomPoints",
-                                        user.user_id || user.id
-                                      );
-                                    }}
-                                    disabled={!canEdit || actionLoading === merchantId}
-                                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium transition-colors ${
-                                      (user.permissions?.canSetCustomPoints || user.permissions?.can_set_custom_points) === true
-                                        ? "bg-blue-100 text-blue-800 hover:bg-blue-200"
-                                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                                    } disabled:opacity-50 disabled:cursor-not-allowed`}
-                                    title={`${fullName}: ${(user.permissions?.canSetCustomPoints || user.permissions?.can_set_custom_points) === true ? "Revogar" : "Conceder"} permissão de pontos`}
-                                  >
-                                    {(user.permissions?.canSetCustomPoints || user.permissions?.can_set_custom_points) === true ? "✓" : "✗"} Pontos
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })
-                        ) : (
-                          <div className="flex flex-wrap gap-1">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                const hasPermission = merchant.can_create_campaigns === true;
-                                handlePermissionClick(
-                                  merchant,
-                                  hasPermission ? "revokeCampaign" : "grantCampaign"
-                                );
-                              }}
-                              disabled={!canEdit || actionLoading === merchantId}
-                              className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium transition-colors ${
-                                merchant.can_create_campaigns === true
-                                  ? "bg-green-100 text-green-800 hover:bg-green-200"
-                                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                              } disabled:opacity-50 disabled:cursor-not-allowed`}
-                              title={merchant.can_create_campaigns === true ? "Revogar permissão" : "Conceder permissão"}
-                            >
-                              {merchant.can_create_campaigns === true ? "✓" : "✗"} Campanhas
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                const hasPermission = merchant.can_set_custom_points === true;
-                                handlePermissionClick(
-                                  merchant,
-                                  hasPermission ? "revokeCustomPoints" : "grantCustomPoints"
-                                );
-                              }}
-                              disabled={!canEdit || actionLoading === merchantId}
-                              className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium transition-colors ${
-                                merchant.can_set_custom_points === true
-                                  ? "bg-blue-100 text-blue-800 hover:bg-blue-200"
-                                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                              } disabled:opacity-50 disabled:cursor-not-allowed`}
-                              title={merchant.can_set_custom_points === true ? "Revogar permissão" : "Conceder permissão"}
-                            >
-                              {merchant.can_set_custom_points === true ? "✓" : "✗"} Pontos
-                            </button>
+                            )}
                           </div>
                         )}
                       </div>
                     </td>
-                    <td className="whitespace-nowrap px-6 py-4">
+                    <td className="whitespace-nowrap px-6 py-5">
                       <button
                         onClick={() => handleStatusChange(merchant, !merchant.is_active)}
                         disabled={!canEdit || actionLoading === merchantId}
-                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full transition-colors ${
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all ${
                           merchant.is_active !== false
-                            ? "bg-green-100 text-green-800 hover:bg-green-200"
-                            : "bg-red-100 text-red-800 hover:bg-red-200"
+                            ? "bg-green-100 text-green-700 hover:bg-green-200 shadow-sm"
+                            : "bg-red-100 text-red-700 hover:bg-red-200 shadow-sm"
                         } disabled:opacity-50`}
                         title={merchant.is_active !== false ? "Desativar" : "Ativar"}
                       >
+                        <div className={`h-2 w-2 rounded-full ${merchant.is_active !== false ? "bg-green-500" : "bg-red-500"}`}></div>
                         {merchant.is_active !== false ? "Ativo" : "Inativo"}
                       </button>
                     </td>
-                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                      {merchant.created_at
-                        ? new Date(merchant.created_at).toLocaleDateString("pt-MZ")
-                        : "-"}
+                    <td className="whitespace-nowrap px-6 py-5">
+                      <div className="text-sm text-gray-600">
+                        {merchant.created_at ? (
+                          <div className="flex items-center gap-1.5">
+                            <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            {new Date(merchant.created_at).toLocaleDateString("pt-MZ", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "numeric"
+                            })}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </div>
                     </td>
-                    <td className="whitespace-nowrap px-6 py-4 text-sm font-medium">
-                      <div className="flex items-center justify-end gap-2">
+                    <td className="whitespace-nowrap px-6 py-5">
+                      <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={() => {
-                            if (merchantId && !isNaN(merchantId)) {
+                            if (merchantId && merchantId !== '' && merchantId !== null && merchantId !== undefined) {
                               handleView(merchantId);
                             } else {
                               console.error("Merchant ID inválido:", merchant);
                             }
                           }}
                           disabled={!canEdit || !merchantId}
-                          className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Ver detalhes"
                         >
                           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1239,7 +1175,7 @@ function MerchantsPageContent() {
                         <button
                           onClick={() => handleEdit(merchant)}
                           disabled={!canEdit || !merchantId}
-                          className="text-yellow-600 hover:text-yellow-900 p-1 rounded hover:bg-yellow-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="p-2 text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Editar"
                         >
                           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1249,7 +1185,7 @@ function MerchantsPageContent() {
                         <button
                           onClick={() => handleDeleteClick(merchant)}
                           disabled={!canEdit || actionLoading === merchantId || deleteLoading}
-                          className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50 transition-colors disabled:opacity-50"
+                          className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50"
                           title="Eliminar"
                         >
                           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

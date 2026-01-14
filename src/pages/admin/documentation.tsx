@@ -2,7 +2,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Head from "next/head";
 import { useAuth } from "@/contexts/AuthContext";
-import { isAdmin, isMerchant } from "@/utils/roleUtils";
+import { isAdmin, isMerchant, isUser } from "@/utils/roleUtils";
 
 export default function DocumentationPage() {
   const { user } = useAuth();
@@ -10,6 +10,7 @@ export default function DocumentationPage() {
   
   const userIsAdmin = isAdmin(user);
   const userIsMerchant = isMerchant(user);
+  const userIsClient = isUser(user);
 
   const toggleSection = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section);
@@ -61,6 +62,12 @@ export default function DocumentationPage() {
             <p className="mt-1 text-sm text-green-800">Você tem acesso às funcionalidades específicas para merchants, incluindo gestão de campanhas e visualização de dados dos seus estabelecimentos.</p>
           </div>
         )}
+        {userIsClient && (
+          <div className="mt-4 rounded border-l-4 border-purple-500 bg-purple-50 p-4">
+            <p className="font-semibold text-purple-900">👤 Você está acessando como <strong>Cliente</strong></p>
+            <p className="mt-1 text-sm text-purple-800">Você tem acesso às funcionalidades para clientes, incluindo visualização de campanhas, suas compras, transferências e estabelecimentos.</p>
+          </div>
+        )}
       </div>
 
       {/* Índice */}
@@ -69,7 +76,16 @@ export default function DocumentationPage() {
         <ul className="space-y-2 text-gray-700">
           <li><a href="#inicio-rapido" className="text-blue-600 hover:underline">1. Início Rápido</a></li>
           <li><a href="#login" className="text-blue-600 hover:underline">2. Login e Autenticação</a></li>
-          {userIsMerchant ? (
+          {userIsClient ? (
+            <>
+              <li><a href="#dashboard-client" className="text-blue-600 hover:underline">3. Meu Dashboard</a></li>
+              <li><a href="#campanhas-client" className="text-blue-600 hover:underline">4. Ver Campanhas</a></li>
+              <li><a href="#compras-client" className="text-blue-600 hover:underline">5. Minhas Compras</a></li>
+              <li><a href="#transferencias-client" className="text-blue-600 hover:underline">6. Minhas Transferências</a></li>
+              <li><a href="#estabelecimentos-client" className="text-blue-600 hover:underline">7. Ver Estabelecimentos</a></li>
+              <li><a href="#notificacoes" className="text-blue-600 hover:underline">8. Notificações</a></li>
+            </>
+          ) : userIsMerchant ? (
             <>
               <li><a href="#dashboard-merchant" className="text-blue-600 hover:underline">3. Meu Dashboard</a></li>
               <li><a href="#campanhas" className="text-blue-600 hover:underline">4. Gerenciar Campanhas</a></li>
@@ -183,8 +199,438 @@ export default function DocumentationPage() {
         )}
       </div>
 
+      {/* Seção 3: Dashboard - Cliente */}
+      {userIsClient && (
+      <div id="dashboard-client" className="rounded-lg bg-white p-6 shadow-md">
+        <h2 
+          className="mb-4 flex cursor-pointer items-center justify-between text-2xl font-bold text-gray-900"
+          onClick={() => toggleSection("dashboard-client")}
+        >
+          <span>3. 📊 Meu Dashboard</span>
+          <svg 
+            className={`h-6 w-6 transition-transform${expandedSection === "dashboard-client" ? "rotate-180" : ""}`}
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </h2>
+        {expandedSection === "dashboard-client" && (
+          <div className="mt-4 space-y-4 text-gray-700">
+            <p className="leading-relaxed">
+              O Dashboard é a primeira página que você vê após fazer login. Ele fornece uma visão geral completa 
+              das suas atividades e pontos no sistema.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <p className="mb-2 font-semibold">📈 Métricas Principais:</p>
+                <ul className="ml-4 list-inside list-disc space-y-1 text-sm">
+                  <li><strong>Pontos Disponíveis:</strong> Mostra o saldo atual dos seus pontos</li>
+                  <li><strong>Total de Compras:</strong> Quantidade de compras que você realizou</li>
+                  <li><strong>Transferências:</strong> Estatísticas de transferências enviadas e recebidas</li>
+                  <li><strong>Amigos:</strong> Número de amigos cadastrados (se aplicável)</li>
+                </ul>
+              </div>
+              <div>
+                <p className="mb-2 font-semibold">📊 Gráficos e Visualizações:</p>
+                <ul className="ml-4 list-inside list-disc space-y-1 text-sm">
+                  <li><strong>Evolução de Pontos:</strong> Gráfico mostrando ganhos, gastos e saldo líquido</li>
+                  <li><strong>Evolução de Compras:</strong> Gráfico com quantidade e valor das suas compras</li>
+                  <li><strong>Compras por Status:</strong> Gráfico mostrando distribuição (confirmadas, pendentes, rejeitadas)</li>
+                  <li><strong>Top Estabelecimentos:</strong> Estabelecimentos que você mais visitou</li>
+                </ul>
+              </div>
+              <div>
+                <p className="mb-2 font-semibold">🔍 Selecionar Período:</p>
+                <p className="text-sm">Use o seletor no topo do dashboard para visualizar dados dos últimos 7 dias, 30 dias ou 90 dias.</p>
+              </div>
+              <div>
+                <p className="mb-2 font-semibold">📋 Atividades Recentes:</p>
+                <p className="text-sm">A seção inferior mostra as últimas atividades que você realizou (compras, transferências, etc.).</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      )}
+
+      {/* Seção 4: Campanhas - Cliente */}
+      {userIsClient && (
+      <div id="campanhas-client" className="rounded-lg bg-white p-6 shadow-md">
+        <h2 
+          className="mb-4 flex cursor-pointer items-center justify-between text-2xl font-bold text-gray-900"
+          onClick={() => toggleSection("campanhas-client")}
+        >
+          <span>4. 🎯 Ver Campanhas</span>
+          <svg 
+            className={`h-6 w-6 transition-transform${expandedSection === "campanhas-client" ? "rotate-180" : ""}`}
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </h2>
+        {expandedSection === "campanhas-client" && (
+          <div className="mt-4 space-y-4 text-gray-700">
+            <p className="leading-relaxed">
+              Como cliente, você pode visualizar todas as campanhas ativas disponíveis no sistema. 
+              As campanhas são criadas pelos estabelecimentos para oferecer pontos e recompensas.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <p className="mb-2 font-semibold">📍 Como Acessar:</p>
+                <ol className="ml-4 list-inside list-decimal space-y-2 text-sm">
+                  <li>No menu lateral esquerdo, clique em <strong>"Campanhas"</strong></li>
+                  <li>Você será redirecionado para a página de listagem de campanhas</li>
+                </ol>
+              </div>
+              <div className="rounded border-l-4 border-yellow-500 bg-yellow-50 p-4">
+                <p className="mb-1 font-semibold text-yellow-900">⚠️ Permissões Limitadas:</p>
+                <p className="text-sm text-yellow-800">
+                  Como cliente, você pode visualizar campanhas ativas, mas não pode criar, editar ou eliminar campanhas. 
+                  Apenas merchants e administradores podem gerenciar campanhas.
+                </p>
+              </div>
+              <div>
+                <p className="mb-2 font-semibold">📋 Visualizar Campanhas:</p>
+                <ol className="ml-4 list-inside list-decimal space-y-2 text-sm">
+                  <li>Na página de campanhas, você verá uma lista ou cards com todas as campanhas ativas</li>
+                  <li>Use a barra de pesquisa para buscar por nome de campanha ou estabelecimento</li>
+                  <li>Filtre por status usando os filtros disponíveis:
+                    <ul className="ml-6 mt-1 list-inside list-disc">
+                      <li><strong>Ativo:</strong> Campanhas atualmente disponíveis</li>
+                      <li><strong>Inativo:</strong> Campanhas pausadas</li>
+                    </ul>
+                  </li>
+                  <li>Filtre por tipo de campanha (se disponível):
+                    <ul className="ml-6 mt-1 list-inside list-disc">
+                      <li>Oferta Automática</li>
+                      <li>Sorteio</li>
+                      <li>Troca</li>
+                      <li>Questões</li>
+                      <li>Indicação</li>
+                      <li>Desafio</li>
+                      <li>Votação</li>
+                      <li>Voucher</li>
+                    </ul>
+                  </li>
+                  <li>Veja informações básicas de cada campanha:
+                    <ul className="ml-6 mt-1 list-inside list-disc">
+                      <li>Nome da campanha</li>
+                      <li>Estabelecimento</li>
+                      <li>Tipo de campanha</li>
+                      <li>Data de início e término</li>
+                      <li>Pontos oferecidos</li>
+                      <li>Status (Ativo/Inativo)</li>
+                    </ul>
+                  </li>
+                  <li>Navegue pelas páginas usando a paginação no rodapé (se houver muitas campanhas)</li>
+                </ol>
+              </div>
+              <div>
+                <p className="mb-2 font-semibold">👁️ Ver Detalhes da Campanha:</p>
+                <ol className="ml-4 list-inside list-decimal space-y-2 text-sm">
+                  <li>Clique no botão <strong>"Ver Detalhes"</strong> ou no card da campanha desejada</li>
+                  <li>Visualize informações completas:
+                    <ul className="ml-6 mt-1 list-inside list-disc">
+                      <li>Descrição completa da campanha</li>
+                      <li>Imagens da campanha (com carrossel para navegar)</li>
+                      <li>Regras e condições de participação</li>
+                      <li>Pontos oferecidos e recompensas</li>
+                      <li>Data de início e término</li>
+                      <li>Estabelecimento responsável</li>
+                    </ul>
+                  </li>
+                </ol>
+              </div>
+              <div className="rounded border-l-4 border-blue-500 bg-blue-50 p-4">
+                <p className="mb-1 font-semibold text-blue-900">💡 Dica:</p>
+                <p className="text-sm text-blue-800">
+                  Participe das campanhas ativas para ganhar pontos e recompensas! Use o app mobile para participar 
+                  diretamente das campanhas escaneando o QR Code ou seguindo as instruções de cada campanha.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      )}
+
+      {/* Seção 5: Compras - Cliente */}
+      {userIsClient && (
+      <div id="compras-client" className="rounded-lg bg-white p-6 shadow-md">
+        <h2 
+          className="mb-4 flex cursor-pointer items-center justify-between text-2xl font-bold text-gray-900"
+          onClick={() => toggleSection("compras-client")}
+        >
+          <span>5. 🛍️ Minhas Compras</span>
+          <svg 
+            className={`h-6 w-6 transition-transform${expandedSection === "compras-client" ? "rotate-180" : ""}`}
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </h2>
+        {expandedSection === "compras-client" && (
+          <div className="mt-4 space-y-4 text-gray-700">
+            <p className="leading-relaxed">
+              Como cliente, você pode visualizar todas as compras que você realizou e acompanhar o status de cada uma.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <p className="mb-2 font-semibold">📍 Como Acessar:</p>
+                <ol className="ml-4 list-inside list-decimal space-y-2 text-sm">
+                  <li>No menu lateral esquerdo, clique em <strong>"Compras"</strong></li>
+                  <li>Você será redirecionado para a página de listagem das suas compras</li>
+                </ol>
+              </div>
+              <div className="rounded border-l-4 border-yellow-500 bg-yellow-50 p-4">
+                <p className="mb-1 font-semibold text-yellow-900">⚠️ Permissões Limitadas:</p>
+                <p className="text-sm text-yellow-800">
+                  Como cliente, você pode visualizar apenas as suas próprias compras. Você não pode validar, 
+                  confirmar ou rejeitar compras. Apenas administradores podem validar compras.
+                </p>
+              </div>
+              <div>
+                <p className="mb-2 font-semibold">📋 Visualizar Compras:</p>
+                <ol className="ml-4 list-inside list-decimal space-y-2 text-sm">
+                  <li>Na página de compras, você verá uma tabela com todas as suas compras</li>
+                  <li>Filtre por status usando os cards no topo:
+                    <ul className="ml-6 mt-1 list-inside list-disc">
+                      <li><strong>Confirmadas:</strong> Compras validadas e aprovadas (pontos já creditados)</li>
+                      <li><strong>Pendentes:</strong> Compras aguardando validação</li>
+                      <li><strong>Rejeitadas:</strong> Compras que foram rejeitadas</li>
+                    </ul>
+                  </li>
+                  <li>Use a barra de pesquisa para buscar por:
+                    <ul className="ml-6 mt-1 list-inside list-disc">
+                      <li>Nome do estabelecimento</li>
+                      <li>Código da compra</li>
+                    </ul>
+                  </li>
+                  <li>Veja informações de cada compra:
+                    <ul className="ml-6 mt-1 list-inside list-disc">
+                      <li>Estabelecimento onde fez a compra</li>
+                      <li>Valor da compra</li>
+                      <li>Pontos ganhos (se confirmada)</li>
+                      <li>Data e hora</li>
+                      <li>Status (Confirmada, Pendente, Rejeitada)</li>
+                    </ul>
+                  </li>
+                  <li>Navegue pelas páginas usando a paginação no rodapé</li>
+                </ol>
+              </div>
+              <div>
+                <p className="mb-2 font-semibold">👁️ Ver Detalhes da Compra:</p>
+                <ol className="ml-4 list-inside list-decimal space-y-2 text-sm">
+                  <li>Clique no botão <strong>"Ver Detalhes"</strong> na linha da compra desejada</li>
+                  <li>Visualize informações completas:
+                    <ul className="ml-6 mt-1 list-inside list-disc">
+                      <li>Dados completos da compra</li>
+                      <li>Informações do estabelecimento</li>
+                      <li>Recibo/prova de compra (se anexado)</li>
+                      <li>Valor da compra e pontos calculados</li>
+                      <li>Status e histórico</li>
+                    </ul>
+                  </li>
+                </ol>
+              </div>
+              <div className="rounded border-l-4 border-green-500 bg-green-50 p-4">
+                <p className="mb-1 font-semibold text-green-900">💡 Como Funciona:</p>
+                <p className="text-sm text-green-800">
+                  Quando você faz uma compra em um estabelecimento parceiro, escaneie o QR Code do estabelecimento 
+                  e anexe o recibo. A compra ficará pendente até ser validada por um administrador. Após validação, 
+                  os pontos são creditados na sua conta.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      )}
+
+      {/* Seção 6: Transferências - Cliente */}
+      {userIsClient && (
+      <div id="transferencias-client" className="rounded-lg bg-white p-6 shadow-md">
+        <h2 
+          className="mb-4 flex cursor-pointer items-center justify-between text-2xl font-bold text-gray-900"
+          onClick={() => toggleSection("transferencias-client")}
+        >
+          <span>6. 💸 Minhas Transferências</span>
+          <svg 
+            className={`h-6 w-6 transition-transform${expandedSection === "transferencias-client" ? "rotate-180" : ""}`}
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </h2>
+        {expandedSection === "transferencias-client" && (
+          <div className="mt-4 space-y-4 text-gray-700">
+            <p className="leading-relaxed">
+              Como cliente, você pode visualizar todas as transferências de pontos que você enviou e recebeu de outros clientes.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <p className="mb-2 font-semibold">📍 Como Acessar:</p>
+                <ol className="ml-4 list-inside list-decimal space-y-2 text-sm">
+                  <li>No menu lateral esquerdo, clique em <strong>"Transferências"</strong></li>
+                  <li>Você será redirecionado para a página de listagem das suas transferências</li>
+                </ol>
+              </div>
+              <div className="rounded border-l-4 border-yellow-500 bg-yellow-50 p-4">
+                <p className="mb-1 font-semibold text-yellow-900">⚠️ Permissões Limitadas:</p>
+                <p className="text-sm text-yellow-800">
+                  Como cliente, você pode visualizar apenas as suas próprias transferências. As transferências são 
+                  realizadas através do app mobile, não através desta plataforma web.
+                </p>
+              </div>
+              <div>
+                <p className="mb-2 font-semibold">📋 Visualizar Transferências:</p>
+                <ol className="ml-4 list-inside list-decimal space-y-2 text-sm">
+                  <li>Na página de transferências, você verá uma tabela com todas as suas transferências</li>
+                  <li>Filtre por tipo usando os filtros disponíveis:
+                    <ul className="ml-6 mt-1 list-inside list-disc">
+                      <li><strong>Enviadas:</strong> Pontos que você enviou para outros clientes</li>
+                      <li><strong>Recebidas:</strong> Pontos que você recebeu de outros clientes</li>
+                      <li><strong>Todas:</strong> Todas as suas transferências</li>
+                    </ul>
+                  </li>
+                  <li>Veja informações de cada transferência:
+                    <ul className="ml-6 mt-1 list-inside list-disc">
+                      <li>Cliente que enviou os pontos (se você recebeu)</li>
+                      <li>Cliente que recebeu os pontos (se você enviou)</li>
+                      <li>Valor transferido</li>
+                      <li>Data e hora da transferência</li>
+                      <li>Status da transferência</li>
+                    </ul>
+                  </li>
+                  <li>Use a barra de pesquisa para buscar por cliente ou valor</li>
+                  <li>Navegue pelas páginas usando a paginação no rodapé</li>
+                </ol>
+              </div>
+              <div>
+                <p className="mb-2 font-semibold">👁️ Ver Detalhes da Transferência:</p>
+                <ol className="ml-4 list-inside list-decimal space-y-2 text-sm">
+                  <li>Clique no botão <strong>"Ver Detalhes"</strong> na linha da transferência desejada</li>
+                  <li>Visualize informações completas:
+                    <ul className="ml-6 mt-1 list-inside list-disc">
+                      <li>Dados completos da transferência</li>
+                      <li>Informações do cliente remetente e destinatário</li>
+                      <li>Valor transferido</li>
+                      <li>Status e histórico</li>
+                    </ul>
+                  </li>
+                </ol>
+              </div>
+              <div className="rounded border-l-4 border-yellow-500 bg-yellow-50 p-4">
+                <p className="mb-1 font-semibold text-yellow-900">⚠️ Importante:</p>
+                <p className="text-sm text-yellow-800">
+                  As transferências são realizadas através do app mobile. Esta plataforma web permite apenas 
+                  visualizar o histórico das suas transferências.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      )}
+
+      {/* Seção 7: Estabelecimentos - Cliente */}
+      {userIsClient && (
+      <div id="estabelecimentos-client" className="rounded-lg bg-white p-6 shadow-md">
+        <h2 
+          className="mb-4 flex cursor-pointer items-center justify-between text-2xl font-bold text-gray-900"
+          onClick={() => toggleSection("estabelecimentos-client")}
+        >
+          <span>7. 🏪 Ver Estabelecimentos</span>
+          <svg 
+            className={`h-6 w-6 transition-transform${expandedSection === "estabelecimentos-client" ? "rotate-180" : ""}`}
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </h2>
+        {expandedSection === "estabelecimentos-client" && (
+          <div className="mt-4 space-y-4 text-gray-700">
+            <p className="leading-relaxed">
+              Como cliente, você pode visualizar todos os estabelecimentos parceiros do sistema onde você pode fazer compras e ganhar pontos.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <p className="mb-2 font-semibold">📍 Como Acessar:</p>
+                <ol className="ml-4 list-inside list-decimal space-y-2 text-sm">
+                  <li>No menu lateral esquerdo, clique em <strong>"Estabelecimentos"</strong></li>
+                  <li>Você será redirecionado para a página de listagem de estabelecimentos</li>
+                </ol>
+              </div>
+              <div className="rounded border-l-4 border-yellow-500 bg-yellow-50 p-4">
+                <p className="mb-1 font-semibold text-yellow-900">⚠️ Permissões Limitadas:</p>
+                <p className="text-sm text-yellow-800">
+                  Como cliente, você pode visualizar estabelecimentos, mas não pode criar, editar ou eliminar estabelecimentos. 
+                  Apenas administradores podem gerenciar estabelecimentos.
+                </p>
+              </div>
+              <div>
+                <p className="mb-2 font-semibold">📋 Visualizar Estabelecimentos:</p>
+                <ol className="ml-4 list-inside list-decimal space-y-2 text-sm">
+                  <li>Na página de estabelecimentos, você verá uma lista ou cards com todos os estabelecimentos parceiros</li>
+                  <li>Use a barra de pesquisa para buscar por nome do estabelecimento</li>
+                  <li>Veja informações básicas de cada estabelecimento:
+                    <ul className="ml-6 mt-1 list-inside list-disc">
+                      <li>Nome do estabelecimento</li>
+                      <li>Tipo de estabelecimento</li>
+                      <li>Endereço</li>
+                      <li>Telefone e email (se disponível)</li>
+                      <li>Status (ativo/inativo)</li>
+                    </ul>
+                  </li>
+                  <li>Navegue pelas páginas usando a paginação no rodapé (se houver muitos estabelecimentos)</li>
+                </ol>
+              </div>
+              <div>
+                <p className="mb-2 font-semibold">👁️ Ver Detalhes do Estabelecimento:</p>
+                <ol className="ml-4 list-inside list-decimal space-y-2 text-sm">
+                  <li>Clique no botão <strong>"Ver Detalhes"</strong> ou no card do estabelecimento desejado</li>
+                  <li>Visualize informações completas:
+                    <ul className="ml-6 mt-1 list-inside list-disc">
+                      <li>Dados completos do estabelecimento</li>
+                      <li>Informações de contato</li>
+                      <li>QR Code do estabelecimento (para usar no app mobile)</li>
+                      <li>Galeria de imagens (se disponível)</li>
+                    </ul>
+                  </li>
+                </ol>
+              </div>
+              <div>
+                <p className="mb-2 font-semibold">📱 QR Code do Estabelecimento:</p>
+                <p className="ml-4 text-sm">
+                  Na página de detalhes, você pode visualizar o QR Code do estabelecimento. Use o app mobile para 
+                  escanear este QR Code quando fizer compras no estabelecimento para ganhar pontos automaticamente.
+                </p>
+              </div>
+              <div className="rounded border-l-4 border-blue-500 bg-blue-50 p-4">
+                <p className="mb-1 font-semibold text-blue-900">💡 Dica:</p>
+                <p className="text-sm text-blue-800">
+                  Visite os estabelecimentos parceiros e escaneie o QR Code ao fazer compras para acumular pontos 
+                  e participar das campanhas disponíveis!
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      )}
+
       {/* Seção 3: Dashboard - Admin */}
-      {!userIsMerchant && (
+      {!userIsMerchant && !userIsClient && (
       <div id="dashboard" className="rounded-lg bg-white p-6 shadow-md">
         <h2 
           className="mb-4 flex cursor-pointer items-center justify-between text-2xl font-bold text-gray-900"
@@ -380,7 +826,8 @@ export default function DocumentationPage() {
       </div>
       )}
 
-      {/* Seção 5: Usuários */}
+      {/* Seção 5: Usuários - Apenas Admin */}
+      {userIsAdmin && (
       <div id="usuarios" className="rounded-lg bg-white p-6 shadow-md">
         <h2 
           className="mb-4 flex cursor-pointer items-center justify-between text-2xl font-bold text-gray-900"
@@ -433,8 +880,10 @@ export default function DocumentationPage() {
           </div>
         )}
       </div>
+      )}
 
-      {/* Seção Clientes */}
+      {/* Seção Clientes - Não para clientes */}
+      {!userIsClient && (
       <div id="clientes" className="rounded-lg bg-white p-6 shadow-md">
         <h2 
           className="mb-4 flex cursor-pointer items-center justify-between text-2xl font-bold text-gray-900"
@@ -571,8 +1020,10 @@ export default function DocumentationPage() {
           </div>
         )}
       </div>
+      )}
 
-      {/* Seção 6: Compras */}
+      {/* Seção 6: Compras - Não para clientes (eles têm seção própria) */}
+      {!userIsClient && (
       <div id="compras" className="rounded-lg bg-white p-6 shadow-md">
         <h2 
           className="mb-4 flex cursor-pointer items-center justify-between text-2xl font-bold text-gray-900"
@@ -733,6 +1184,7 @@ export default function DocumentationPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* Seção 8: Maktubia Friends - Apenas Admin */}
       {userIsAdmin && (
@@ -1097,7 +1549,8 @@ export default function DocumentationPage() {
       </div>
       )}
 
-      {/* Seção 9: Transferências */}
+      {/* Seção 9: Transferências - Não para clientes (eles têm seção própria) */}
+      {!userIsClient && (
       <div id="transferencias" className="rounded-lg bg-white p-6 shadow-md">
         <h2 
           className="mb-4 flex cursor-pointer items-center justify-between text-2xl font-bold text-gray-900"
@@ -1223,6 +1676,7 @@ export default function DocumentationPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* Seção 10: Estabelecimentos - Merchant */}
       {userIsMerchant && (

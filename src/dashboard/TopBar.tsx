@@ -1,6 +1,5 @@
 import { useDashboardContext } from "./Provider";
 import { useAuth } from "@/contexts/AuthContext";
-import Image from "next/image";
 import { useRouter } from "next/router";
 import { useState, useRef, useEffect } from "react";
 

@@ -4,10 +4,14 @@ import { discountReservationCampaignsService, DiscountReservationCampaign } from
 import { establishmentService } from "@/services/establishment.service";
 import { AlertModal } from "@/components/modals/AlertModal";
 import { ConfirmModal } from "@/components/modals/ConfirmModal";
+import { useAuth } from "@/contexts/AuthContext";
+import { isAdmin, isMerchant, isUser } from "@/utils/roleUtils";
 
 export default function DiscountReservationCampaignDetailsPage() {
   const router = useRouter();
   const { id } = router.query;
+  const { user } = useAuth();
+  const userIsClient = user ? isUser(user) && !isAdmin(user) && !isMerchant(user) : false;
   const [campaign, setCampaign] = useState<DiscountReservationCampaign | null>(null);
   const [establishment, setEstablishment] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -198,31 +202,35 @@ export default function DiscountReservationCampaignDetailsPage() {
             }`}>
               {campaign.status || (isActive ? "Activa" : "Inativa")}
             </span>
-            {!isActive && (
-              <button
-                onClick={() => handleStatusChange("active")}
-                disabled={actionLoading}
-                className="rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:opacity-50"
-              >
-                Ativar
-              </button>
+            {!userIsClient && (
+              <>
+                {!isActive && (
+                  <button
+                    onClick={() => handleStatusChange("active")}
+                    disabled={actionLoading}
+                    className="rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:opacity-50"
+                  >
+                    Ativar
+                  </button>
+                )}
+                {isActive && (
+                  <button
+                    onClick={() => handleStatusChange("inactive")}
+                    disabled={actionLoading}
+                    className="rounded-lg bg-yellow-600 px-4 py-2 text-white hover:bg-yellow-700 disabled:opacity-50"
+                  >
+                    Desativar
+                  </button>
+                )}
+                <button
+                  onClick={handleDeleteClick}
+                  disabled={actionLoading}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  Eliminar
+                </button>
+              </>
             )}
-            {isActive && (
-              <button
-                onClick={() => handleStatusChange("inactive")}
-                disabled={actionLoading}
-                className="rounded-lg bg-yellow-600 px-4 py-2 text-white hover:bg-yellow-700 disabled:opacity-50"
-              >
-                Desativar
-              </button>
-            )}
-            <button
-              onClick={handleDeleteClick}
-              disabled={actionLoading}
-              className="rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50"
-            >
-              Eliminar
-            </button>
           </div>
         </div>
       </div>
@@ -382,4 +390,5 @@ export default function DiscountReservationCampaignDetailsPage() {
     </div>
   );
 }
+
 

@@ -26,6 +26,8 @@ export default function NewCampaignPage() {
     // Campos específicos por tipo de campanha
     auto_points_amount?: number;
     auto_points_condition?: string;
+    benefit_description?: string;
+    required_quantity?: number;
     draw_participation_condition?: string;
     draw_min_spend?: number;
     draw_chances_per_purchase?: number;
@@ -70,16 +72,8 @@ export default function NewCampaignPage() {
     voucher_discount_value?: number;
     voucher_single_use?: boolean;
     voucher_code_required?: boolean;
-    booking_required?: boolean;
-    booking_discount_type?: "percentual" | "fixo";
-    booking_discount_value?: number;
-    booking_min_advance_days?: number;
-    booking_max_advance_days?: number;
-    booking_service_types?: string[];
-    booking_points_earned?: number;
-    booking_confirmation_required?: boolean;
   }>({
-    establishment_id: 0,
+    establishment_id: "" as string | number,
     // Campos obrigatórios do schema (CR#3)
     campaign_name: "",
     reward_value_mt: 0,
@@ -104,6 +98,8 @@ export default function NewCampaignPage() {
     // Campos específicos por tipo (inicializados como undefined)
     auto_points_amount: undefined,
     auto_points_condition: undefined,
+    benefit_description: undefined,
+    required_quantity: undefined,
     draw_participation_condition: undefined,
     draw_min_spend: undefined,
     draw_chances_per_purchase: undefined,
@@ -148,14 +144,6 @@ export default function NewCampaignPage() {
     voucher_discount_value: undefined,
     voucher_single_use: false,
     voucher_code_required: false,
-    booking_required: true,
-    booking_discount_type: undefined,
-    booking_discount_value: undefined,
-    booking_min_advance_days: undefined,
-    booking_max_advance_days: undefined,
-    booking_service_types: undefined,
-    booking_points_earned: undefined,
-    booking_confirmation_required: false,
   });
   
   // Tipos de campanha disponíveis (conforme backend)
@@ -229,7 +217,7 @@ export default function NewCampaignPage() {
       label: "Oferta De Desconto por Marcacao",
       description: "Cliente marca/reserva um serviço e recebe um desconto",
       icon: "📅",
-      fields: ["booking_discount_type", "booking_discount_value", "booking_points_earned"],
+      fields: [],
       color: "cyan",
     },
   ];
@@ -628,21 +616,25 @@ export default function NewCampaignPage() {
   };
   
   // Função auxiliar para verificar se pode criar campanha no estabelecimento
-  const canCreateCampaign = (establishmentId: number): boolean => {
+  const canCreateCampaign = (establishmentId: number | string): boolean => {
     // Admin pode criar em qualquer estabelecimento
     if (isAdmin(user)) {
       return true;
     }
     
     // Merchant precisa verificar permissão
-    const establishment = establishments.find(e => e.id === establishmentId);
+    // Comparar IDs como strings para garantir compatibilidade
+    const establishment = establishments.find(e => {
+      const estId = e.id || e.establishment_id || e.est_id;
+      return String(estId) === String(establishmentId);
+    });
     return establishment?.merchant_permissions?.can_create_campaigns === true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.establishment_id || formData.establishment_id === 0) {
+    if (!formData.establishment_id || formData.establishment_id === 0 || formData.establishment_id === "") {
       setAlertConfig({
         title: "Erro!",
         message: "Por favor, selecione um estabelecimento.",
@@ -757,26 +749,7 @@ export default function NewCampaignPage() {
       }
     }
     
-    if (formData.type === "RewardType_Booking") {
-      if (!formData.booking_discount_type) {
-        setAlertConfig({
-          title: "Erro!",
-          message: "Por favor, selecione o tipo de desconto (percentual ou fixo).",
-          type: "error",
-        });
-        setAlertModalOpen(true);
-        return;
-      }
-      if (!formData.booking_discount_value || formData.booking_discount_value <= 0) {
-        setAlertConfig({
-          title: "Erro!",
-          message: "Por favor, informe o valor do desconto (deve ser maior que 0).",
-          type: "error",
-        });
-        setAlertModalOpen(true);
-        return;
-      }
-    }
+    // RewardType_Booking não precisa de validação extra - apenas campos básicos
     
     if (formData.type === "RewardType_Quiz") {
       if (!formData.quiz_questions || !Array.isArray(formData.quiz_questions) || formData.quiz_questions.length === 0) {
@@ -860,7 +833,21 @@ export default function NewCampaignPage() {
       // IMPORTANTE: NÃO enviar campaign_id - ele é gerado automaticamente pelo banco
       const campaignData: any = {
         // Campos obrigatórios
-        establishment_id: Number(formData.establishment_id), // Garantir que é número
+        // establishment_id pode ser string (EST_xxx) ou número - o backend aceita ambos e converte para string
+        establishment_id: (() => {
+          const estId = formData.establishment_id;
+          // Se for string que começa com EST_, manter como string
+          if (typeof estId === 'string' && estId.match(/^EST_/)) {
+            return estId;
+          }
+          // Se já for número, manter como número
+          if (typeof estId === 'number') {
+            return estId;
+          }
+          // Tentar converter para número, mas se falhar (NaN), manter como string
+          const numValue = Number(estId);
+          return isNaN(numValue) ? estId : numValue;
+        })(),
         campaign_name: formData.campaign_name,
         reward_value_mt: Number(formData.reward_value_mt),
         reward_points_cost: Number(formData.reward_points_cost),
@@ -896,6 +883,9 @@ export default function NewCampaignPage() {
         ...(formData.type === "RewardType_Auto" && {
           ...(formData.auto_points_amount !== undefined && formData.auto_points_amount !== null && { auto_points_amount: formData.auto_points_amount }),
           ...(formData.auto_points_condition && { auto_points_condition: formData.auto_points_condition }),
+          ...(formData.benefit_description && { benefit_description: formData.benefit_description }),
+          ...(formData.required_quantity !== undefined && formData.required_quantity !== null && { required_quantity: formData.required_quantity }),
+          ...(formData.reward_description && { reward_description: formData.reward_description }),
         }),
         
         // 2️⃣ RewardType_Draw (Sorteio)
@@ -966,17 +956,7 @@ export default function NewCampaignPage() {
           ...(formData.voucher_code_required !== undefined && { voucher_code_required: formData.voucher_code_required }),
         }),
         
-        // 9️⃣ RewardType_Booking (Oferta De Desconto por Marcacao)
-        ...(formData.type === "RewardType_Booking" && {
-          ...(formData.booking_required !== undefined && { booking_required: formData.booking_required }),
-          ...(formData.booking_discount_type && { booking_discount_type: formData.booking_discount_type }),
-          ...(formData.booking_discount_value !== undefined && formData.booking_discount_value !== null && { booking_discount_value: formData.booking_discount_value }),
-          ...(formData.booking_min_advance_days !== undefined && formData.booking_min_advance_days !== null && { booking_min_advance_days: formData.booking_min_advance_days }),
-          ...(formData.booking_max_advance_days !== undefined && formData.booking_max_advance_days !== null && { booking_max_advance_days: formData.booking_max_advance_days }),
-          ...(formData.booking_service_types && Array.isArray(formData.booking_service_types) && formData.booking_service_types.length > 0 && { booking_service_types: JSON.stringify(formData.booking_service_types) }),
-          ...(formData.booking_points_earned !== undefined && formData.booking_points_earned !== null && { booking_points_earned: formData.booking_points_earned }),
-          ...(formData.booking_confirmation_required !== undefined && { booking_confirmation_required: formData.booking_confirmation_required }),
-        }),
+        // 9️⃣ RewardType_Booking (Oferta De Desconto por Marcacao) - apenas campos básicos
         
         // Mapear campos genéricos para campos específicos quando necessário
         // RewardType_Draw: min_purchase_amount -> draw_min_spend
@@ -1293,8 +1273,17 @@ export default function NewCampaignPage() {
               <select
                 id="establishment_id"
                 name="establishment_id"
-                value={formData.establishment_id && formData.establishment_id > 0 ? String(formData.establishment_id) : ""}
-                onChange={handleChange}
+                value={formData.establishment_id && formData.establishment_id !== 0 && formData.establishment_id !== "" ? String(formData.establishment_id) : ""}
+                onChange={(e) => {
+                  const selectedValue = e.target.value;
+                  // Manter como string se for um ID não numérico (ex: EST_xxx), senão tentar converter para número
+                  // Se a conversão resultar em NaN, manter como string
+                  const finalValue = selectedValue === "" ? "" : (selectedValue.match(/^EST_/) || isNaN(Number(selectedValue)) ? selectedValue : Number(selectedValue));
+                  setFormData(prev => ({
+                    ...prev,
+                    establishment_id: finalValue
+                  }));
+                }}
                 required
                 disabled={establishments.length === 0}
                 className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
@@ -1306,8 +1295,11 @@ export default function NewCampaignPage() {
                 </option>
                 {establishments.map((est) => {
                   const hasPermission = isAdmin(user) || est.merchant_permissions?.can_create_campaigns === true;
+                  const estId = est.id || est.establishment_id || est.est_id;
+                  if (!estId) return null;
+                  const estIdStr = String(estId);
                   return (
-                  <option key={est.id} value={String(est.id)}>
+                  <option key={estIdStr} value={estIdStr}>
                     {est.name} {est.type ? `(${est.type})` : ""}
                       {!isAdmin(user) && hasPermission && " ✓"}
                   </option>
@@ -1387,14 +1379,81 @@ export default function NewCampaignPage() {
         </div>
 
         {/* Configurações baseadas no tipo de campanha */}
-        {formData.type && (
+        {formData.type && formData.type !== "RewardType_Booking" && (
         <div className="rounded-lg bg-white p-6 shadow">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               Configurações - {campaignTypes.find(t => t.value === formData.type)?.label}
             </h2>
           
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              {/* Campos antigos de Oferta Automática e limites gerais removidos pelo CR#3 */}
+              {/* Campos para Oferta Automática (RewardType_Auto) */}
+              {formData.type === "RewardType_Auto" && (
+                <>
+                  <div className="md:col-span-2">
+                    <label htmlFor="benefit_description" className="block text-sm font-medium text-gray-700 mb-2">
+                      Descrição do Benefício <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      id="benefit_description"
+                      name="benefit_description"
+                      value={formData.benefit_description || ""}
+                      onChange={handleChange}
+                      rows={3}
+                      required
+                      className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                      placeholder="Ex: Compre 5 latas de bolachas e ganha um frango"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Descreva o benefício da campanha (ex: compre X e ganhe Y)
+                    </p>
+                  </div>
+
+                  <div>
+                    <label htmlFor="required_quantity" className="block text-sm font-medium text-gray-700 mb-2">
+                      Quantidade Necessária <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      id="required_quantity"
+                      name="required_quantity"
+                      value={formData.required_quantity ?? ""}
+                      onChange={handleChange}
+                      min="1"
+                      step="1"
+                      required
+                      className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                      placeholder="Ex: 5"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Quantidade de compras necessárias para ganhar o prêmio
+                    </p>
+                  </div>
+
+                  <div>
+                    <label htmlFor="reward_description_auto" className="block text-sm font-medium text-gray-700 mb-2">
+                      Descrição do Prêmio <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="reward_description_auto"
+                      name="reward_description_auto"
+                      value={formData.reward_description || ""}
+                      onChange={(e) => {
+                        setFormData(prev => ({
+                          ...prev,
+                          reward_description: e.target.value
+                        }));
+                      }}
+                      required
+                      className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                      placeholder="Ex: um frango"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      O que o cliente ganha ao completar a campanha
+                    </p>
+                  </div>
+                </>
+              )}
 
               {/* Periodicidade do Sorteio (CR#3) */}
               {formData.type === "RewardType_Draw" && (
@@ -1560,57 +1619,7 @@ export default function NewCampaignPage() {
                 </div>
               )}
 
-              {/* Campos específicos para RewardType_Booking (Oferta De Desconto por Marcacao) */}
-              {formData.type === "RewardType_Booking" && (
-                <>
-                  <div>
-                    <label htmlFor="booking_discount_type" className="block text-sm font-medium text-gray-700 mb-2">
-                      Tipo de Desconto <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      id="booking_discount_type"
-                      name="booking_discount_type"
-                      value={formData.booking_discount_type ?? ""}
-                      onChange={handleChange}
-                      required
-                      className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
-                    >
-                      <option value="" disabled>Selecione</option>
-                      <option value="percentual">Percentual (%)</option>
-                      <option value="fixo">Valor Fixo (MT)</option>
-                    </select>
-                    <p className="mt-1 text-xs text-gray-500">Tipo de desconto aplicado na marcação</p>
-                  </div>
-
-                  <div>
-                    <label htmlFor="booking_discount_value" className="block text-sm font-medium text-gray-700 mb-2">
-                      Valor do Desconto <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      id="booking_discount_value"
-                      name="booking_discount_value"
-                      value={formData.booking_discount_value ?? ""}
-                      onChange={handleChange}
-                      min="0"
-                      step={formData.booking_discount_type === "percentual" ? "0.1" : "0.01"}
-                      required
-                      className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
-                      placeholder={formData.booking_discount_type === "percentual" ? "Ex: 10 (10%)" : "Ex: 50.00 (50 MT)"}
-                    />
-                    <p className="mt-1 text-xs text-gray-500">
-                      {formData.booking_discount_type === "percentual" 
-                        ? "Percentual de desconto (ex: 10 para 10%)"
-                        : "Valor fixo do desconto em Meticais"}
-                    </p>
-                  </div>
-
-        
-
-
-                  
-                </>
-              )}
+              {/* RewardType_Booking não precisa de campos extras - apenas os campos básicos */}
 
               {/* Custo em Pontos (para RewardType_Quiz, RewardType_Referral) */}
               {(formData.type === "RewardType_Quiz" || formData.type === "RewardType_Referral") && (
@@ -2206,28 +2215,6 @@ export default function NewCampaignPage() {
             </div>
               )}
 
-              {/* Multiplicador de Bônus (apenas para tipos que envolvem compras) */}
-              {(formData.type === "RewardType_Auto" || formData.type === "RewardType_Draw" || 
-                formData.type === "RewardType_Exchange" || formData.type === "RewardType_Challenge" ||
-                formData.type === "RewardType_Voucher") && (
-                <div>
-                  <label htmlFor="bonus_multiplier" className="block text-sm font-medium text-gray-700 mb-2">
-                    Multiplicador de Bônus
-                  </label>
-                  <input
-                    type="number"
-                    id="bonus_multiplier"
-                    name="bonus_multiplier"
-                    value={formData.bonus_multiplier ?? ""}
-                    onChange={handleChange}
-                    min="1"
-                    step="0.1"
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
-                    placeholder="Ex: 2.0"
-                  />
-                  <p className="mt-1 text-xs text-gray-500">Multiplicador para pontos bônus (ex: 2.0 = dobra os pontos)</p>
-          </div>
-              )}
         </div>
           </div>
         )}

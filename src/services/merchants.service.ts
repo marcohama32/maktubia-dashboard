@@ -89,6 +89,7 @@ export interface GetAllMerchantsParams {
   page?: number;
   limit?: number;
   is_active?: boolean;
+  all?: boolean;
 }
 
 export interface GetMerchantsByEstablishmentParams {
@@ -340,6 +341,7 @@ export const merchantsService = {
       if (params?.page !== undefined) queryParams.page = params.page;
       if (params?.limit !== undefined) queryParams.limit = params.limit;
       if (params?.is_active !== undefined) queryParams.is_active = params.is_active;
+      if (params?.all !== undefined) queryParams.all = params.all;
 
       const response = await api.get("/merchants", { params: queryParams });
 

@@ -2,11 +2,34 @@ import Head from "next/head";
 import React, { useEffect } from "react";
 import "tailwindcss/tailwind.css";
 import { AppProps } from "next/app";
+
+// Adicionar estilos para animação do banner de notificações
+if (typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes slideUp {
+      from {
+        transform: translateY(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+  `;
+  if (!document.head.querySelector('style[data-notification-banner]')) {
+    style.setAttribute('data-notification-banner', 'true');
+    document.head.appendChild(style);
+  }
+}
 import { DashboardLayout } from "@/dashboard/Layout";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { RouteGuard } from "@/components/RouteGuard";
+import { NotificationToast } from "@/components/NotificationToast";
+import { NotificationPermissionBanner } from "@/components/NotificationPermissionBanner";
 import { useRouter } from "next/router";
 
 // Pages that should skip the dashboard layout
@@ -200,6 +223,8 @@ function MyApp({ Component, pageProps }: AppProps) {
             <link rel="shortcut icon" href="/images/logo2.png" type="image/png" />
             <link rel="apple-touch-icon" href="/images/logo2.png" />
           </Head>
+          <NotificationToast />
+          <NotificationPermissionBanner />
           <RouteGuard>
             {noAuth ? (
               <Component {...pageProps} />

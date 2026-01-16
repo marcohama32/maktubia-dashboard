@@ -1261,43 +1261,32 @@ export default function DocumentationPage() {
           <div className="mt-4 space-y-4 text-gray-700">
             <p className="leading-relaxed">
               Como merchant, você pode criar e gerenciar campanhas promocionais para seus estabelecimentos. 
-              Existem duas páginas disponíveis: <strong>Campanhas Públicas</strong> e <strong>Minhas Campanhas</strong>.
+              Acesse a página de <strong>Campanhas</strong> para visualizar e gerenciar todas as campanhas.
             </p>
             <div className="space-y-4">
               <div>
                 <p className="mb-2 font-semibold">📍 Como Acessar:</p>
                 <ol className="ml-4 list-inside list-decimal space-y-2 text-sm">
-                  <li>No menu lateral esquerdo, clique em <strong>"Campanhas Públicas"</strong> ou <strong>"Minhas Campanhas"</strong></li>
-                  <li>Ou acesse diretamente através dos links no menu</li>
+                  <li>No menu lateral esquerdo, clique em <strong>"Campanhas"</strong></li>
+                  <li>Ou acesse diretamente através do link no menu</li>
                 </ol>
               </div>
               <div>
-                <p className="mb-2 font-semibold">📋 Campanhas Públicas:</p>
-                <p className="ml-4 text-sm mb-2">Visualize todas as campanhas públicas disponíveis no sistema:</p>
+                <p className="mb-2 font-semibold">📋 Gerenciar Campanhas:</p>
+                <p className="ml-4 text-sm mb-2">Visualize e gerencie todas as campanhas:</p>
                 <ol className="ml-6 list-inside list-decimal space-y-2 text-sm">
-                  <li>Clique em <strong>"Campanhas Públicas"</strong> no menu</li>
-                  <li>Veja campanhas criadas por outros merchants</li>
-                  <li>Use a barra de pesquisa para buscar por nome ou tipo de campanha</li>
-                  <li>Filtre por status (Ativo, Inativo, Rascunho) usando os filtros disponíveis</li>
-                  <li>Clique em <strong>"Ver Detalhes"</strong> para ver informações completas de qualquer campanha</li>
-                  <li><strong>Importante:</strong> Você pode visualizar, mas não pode editar ou eliminar campanhas de outros merchants</li>
-                </ol>
-              </div>
-              <div>
-                <p className="mb-2 font-semibold">🎯 Minhas Campanhas:</p>
-                <p className="ml-4 text-sm mb-2">Gerencie as campanhas que você criou:</p>
-                <ol className="ml-6 list-inside list-decimal space-y-2 text-sm">
-                  <li>Clique em <strong>"Minhas Campanhas"</strong> no menu</li>
-                  <li>Veja todas as suas campanhas em uma lista organizada</li>
+                  <li>Clique em <strong>"Campanhas"</strong> no menu</li>
+                  <li>Veja todas as campanhas em uma lista organizada</li>
                   <li>Use os filtros para buscar por estabelecimento, status ou tipo</li>
                   <li>Pesquise por nome de campanha usando a barra de pesquisa</li>
                   <li>Visualize métricas de cada campanha: participantes, pontos distribuídos, receita gerada</li>
+                  <li>Clique em <strong>"Ver Detalhes"</strong> para ver informações completas de qualquer campanha</li>
                 </ol>
               </div>
               <div>
                 <p className="mb-2 font-semibold">➕ Passo a Passo: Criar Nova Campanha</p>
                 <ol className="ml-4 list-inside list-decimal space-y-2 text-sm">
-                  <li>Na página <strong>"Minhas Campanhas"</strong>, clique no botão <strong>"Nova Campanha"</strong> (geralmente no topo direito)</li>
+                  <li>Na página de <strong>"Campanhas"</strong>, clique no botão <strong>"Nova Campanha"</strong> (geralmente no topo direito)</li>
                   <li>Selecione o tipo de campanha desejado:
                     <ul className="ml-6 mt-1 list-inside list-disc">
                       <li><strong>⚡ Oferta Automática:</strong> Cliente ganha pontos automaticamente ao aderir</li>

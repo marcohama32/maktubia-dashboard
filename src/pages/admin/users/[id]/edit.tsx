@@ -21,7 +21,7 @@ export default function EditUserPage() {
   const [phoneError, setPhoneError] = useState<string>("");
   const [documentError, setDocumentError] = useState<string>("");
   const [roles, setRoles] = useState<Role[]>([]);
-  const [formData, setFormData] = useState<UpdateUserDTO & { documentType: DocumentType; documentNumber: string }>({
+  const [formData, setFormData] = useState<UpdateUserDTO & { documentType: DocumentType; documentNumber: string; role_id?: number }>({
     firstName: "",
     lastName: "",
     username: "",
@@ -31,7 +31,7 @@ export default function EditUserPage() {
     user_code: "",
     documentType: "BI",
     documentNumber: "",
-    role: "",
+    role_id: undefined,
     isActive: true,
   });
   const [password, setPassword] = useState<string>("");
@@ -143,6 +143,20 @@ export default function EditUserPage() {
         }
       }
       
+      // Extrair role_id do objeto role ou do campo direto
+      let roleId: number | undefined = undefined;
+      if (data.role) {
+        if (typeof data.role === "object" && data.role.id) {
+          roleId = data.role.id;
+        } else if (typeof data.role === "number") {
+          roleId = data.role;
+        }
+      }
+      // Se não encontrou no objeto role, tentar role_id direto
+      if (!roleId && (data as any).role_id) {
+        roleId = (data as any).role_id;
+      }
+      
       setFormData({
         firstName: firstName,
         lastName: lastName,
@@ -153,7 +167,7 @@ export default function EditUserPage() {
         user_code: (data as any).user_code || "",
         documentType: documentType,
         documentNumber: documentNumber ? documentNumber.replace(/\s+/g, "") : "",
-        role: typeof data.role === "string" ? data.role : (data.role?.name || ""),
+        role_id: roleId,
         isActive: data.isActive !== false,
       });
       setPassword(""); // Não carregar senha (por segurança)
@@ -214,7 +228,7 @@ export default function EditUserPage() {
         return;
       }
       
-      const dataToSend: UpdateUserDTO & { tipo_documento?: string; numero_documento?: string } = {
+      const dataToSend: UpdateUserDTO & { tipo_documento?: string; numero_documento?: string; role_id?: number } = {
         name: fullName,
         username: formData.username?.trim() || undefined,
         email: formData.email?.trim() || undefined,
@@ -231,13 +245,13 @@ export default function EditUserPage() {
           : (formData.documentType === "BI" && formData.documentNumber 
             ? formatDocumentNumber("BI", formData.documentNumber).replace(/\s+/g, "")
             : undefined),
-        role: formData.role?.trim() || undefined,
+        role_id: formData.role_id,
         isActive: formData.isActive !== undefined ? formData.isActive : true,
       };
       
-      // Remover campos undefined ou vazios (exceto name e isActive que são obrigatórios)
+      // Remover campos undefined ou vazios (exceto name, isActive e role_id que são obrigatórios)
       Object.keys(dataToSend).forEach(key => {
-        if (key === "name" || key === "isActive") return; // Manter name e isActive
+        if (key === "name" || key === "isActive" || key === "role_id") return; // Manter name, isActive e role_id
         
         const value = dataToSend[key as keyof UpdateUserDTO];
         if (value === undefined || value === "" || (typeof value === "string" && value.trim() === "")) {
@@ -554,16 +568,19 @@ export default function EditUserPage() {
                 </div>
               ) : (
                 <select
-                  id="role"
-                  name="role"
+                  id="role_id"
+                  name="role_id"
                   required
-                  value={formData.role || ""}
-                  onChange={handleChange}
+                  value={formData.role_id || ""}
+                  onChange={(e) => {
+                    const roleId = e.target.value ? parseInt(e.target.value) : undefined;
+                    setFormData(prev => ({ ...prev, role_id: roleId }));
+                  }}
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
                 >
                   <option value="">Selecione a função</option>
                   {roles.map((role) => (
-                    <option key={role.id} value={role.name}>
+                    <option key={role.id} value={role.id}>
                       {role.name} {role.description ? `- ${role.description}` : ""}
                     </option>
                   ))}

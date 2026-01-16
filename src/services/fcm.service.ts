@@ -250,6 +250,13 @@ class FCMService {
   }
 
   /**
+   * Obter função de unsubscribe de mensagens FCM
+   */
+  getMessageUnsubscribe(): (() => void) | null {
+    return this.messageUnsubscribe;
+  }
+
+  /**
    * Desconectar FCM
    */
   disconnect(): void {

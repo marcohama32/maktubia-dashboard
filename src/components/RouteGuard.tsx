@@ -6,11 +6,15 @@ import { isAdmin, isMerchant, isUser, getUserRole } from "@/utils/roleUtils";
 // Rotas públicas que não precisam de autenticação
 const PUBLIC_ROUTES = ["/login", "/register", "/forgot-password"];
 
-// Rotas que requerem admin
-const ADMIN_ROUTES = [
+// Rotas que requerem admin (apenas merchants não podem acessar)
+const ADMIN_ONLY_ROUTES = [
   "/admin/merchants",
-  "/admin/users",
   "/admin/friends",
+];
+
+// Rotas que admin e merchants podem acessar
+const ADMIN_AND_MERCHANT_ROUTES = [
+  "/admin/users",
 ];
 
 // Rotas que requerem merchant
@@ -408,9 +412,28 @@ export function RouteGuard({ children }: RouteGuardProps) {
     }
 
     // Verificação para rotas específicas
-    const isAdminRoute = ADMIN_ROUTES.some(route => pathname.startsWith(route));
+    const isAdminOnlyRoute = ADMIN_ONLY_ROUTES.some(route => pathname.startsWith(route));
+    const isAdminAndMerchantRoute = ADMIN_AND_MERCHANT_ROUTES.some(route => pathname.startsWith(route));
+    const isAdminRoute = isAdminOnlyRoute || isAdminAndMerchantRoute; // Para compatibilidade
     const isMerchantRoute = MERCHANT_ROUTES.some(route => pathname.startsWith(route));
     const isSharedRoute = SHARED_ROUTES.some(route => pathname.startsWith(route));
+    
+    // Debug: verificar classificação da rota
+    if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+      if (pathname.startsWith("/admin/users")) {
+        console.log("🔍 [RouteGuard] Classificação da rota /admin/users:", {
+          pathname,
+          isAdminOnlyRoute,
+          isAdminAndMerchantRoute,
+          isAdminRoute,
+          isMerchantRoute,
+          isSharedRoute,
+          userIsAdmin,
+          userIsMerchant,
+          userRole,
+        });
+      }
+    }
     
     // Rotas que clientes podem acessar (visualização apenas)
     const CLIENT_ACCESSIBLE_ROUTES = [
@@ -433,7 +456,8 @@ export function RouteGuard({ children }: RouteGuardProps) {
           pathname,
           isClientAccessibleRoute,
           isSharedRoute,
-          isAdminRoute,
+          isAdminOnlyRoute,
+          isAdminAndMerchantRoute,
           isMerchantRoute,
         });
       }
@@ -471,7 +495,7 @@ export function RouteGuard({ children }: RouteGuardProps) {
           }
           return;
         }
-      } else if (isAdminRoute || isMerchantRoute) {
+      } else if (isAdminOnlyRoute || isAdminAndMerchantRoute || isMerchantRoute) {
         // Debug
         if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
           console.log("❌ [RouteGuard] Acesso negado - cliente tentando acessar rota administrativa:", {
@@ -498,34 +522,6 @@ export function RouteGuard({ children }: RouteGuardProps) {
         return;
       }
     }
-    
-    // Se for admin ou merchant tentando acessar rota de cliente, permitir (mas não é necessário bloquear)
-    // Rotas administrativas restritas apenas para admin/merchant
-    if ((isAdminRoute || isMerchantRoute) && !userIsAdmin && !userIsMerchant && !userIsUser) {
-      // Debug
-      if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-        console.log("❌ [RouteGuard] Acesso negado - usuário sem permissão:", {
-          pathname,
-          userRole,
-          user: user?.email || user?.username || "N/A",
-        });
-      }
-      if (!isRedirecting && !redirectingRef.current) {
-        redirectingRef.current = true;
-        setIsRedirecting(true);
-        router.replace("/").catch(() => {
-          window.location.href = "/";
-        }).finally(() => {
-          timeoutRef.current = setTimeout(() => {
-            setIsRedirecting(false);
-            redirectingRef.current = false;
-          }, 2000);
-        });
-      }
-      setHasAccess(false);
-      setIsChecking(false);
-      return;
-    }
 
     // Debug: logar informações de verificação
     if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
@@ -537,14 +533,15 @@ export function RouteGuard({ children }: RouteGuardProps) {
         userIsUser,
         user: user?.email || user?.username || "N/A",
         accessGranted,
-        isAdminRoute,
+        isAdminOnlyRoute,
+        isAdminAndMerchantRoute,
         isMerchantRoute,
         isSharedRoute,
       });
     }
 
-    // Verificar se é rota de admin (variáveis já definidas acima)
-    if (isAdminRoute) {
+    // Verificar se é rota de admin apenas (apenas admin pode acessar)
+    if (isAdminOnlyRoute) {
       if (userIsAdmin) {
         accessGranted = true;
         accessGrantedRef.current = true;
@@ -552,7 +549,7 @@ export function RouteGuard({ children }: RouteGuardProps) {
         setIsChecking(false);
         // Debug
         if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-          console.log("✅ [RouteGuard] Acesso concedido - é admin para rota de admin");
+          console.log("✅ [RouteGuard] Acesso concedido - é admin para rota de admin apenas");
         }
         return;
       } else {
@@ -566,6 +563,65 @@ export function RouteGuard({ children }: RouteGuardProps) {
           setIsRedirecting(true);
           router.replace("/merchant/dashboard").catch(() => {
             window.location.href = "/merchant/dashboard";
+          }).finally(() => {
+            // Resetar isRedirecting após um tempo
+            timeoutRef.current = setTimeout(() => {
+              setIsRedirecting(false);
+              redirectingRef.current = false;
+            }, 2000);
+          });
+        }
+        setHasAccess(false);
+        setIsChecking(false);
+        return;
+      }
+    }
+
+    // Verificar se é rota que admin e merchants podem acessar
+    if (isAdminAndMerchantRoute) {
+      // Debug detalhado
+      if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+        console.log("🔍 [RouteGuard] Verificando rota admin/merchant:", {
+          pathname,
+          isAdminAndMerchantRoute,
+          userIsAdmin,
+          userIsMerchant,
+          userRole,
+          user: user?.email || user?.username || "N/A",
+        });
+      }
+      
+      if (userIsAdmin || userIsMerchant) {
+        accessGranted = true;
+        accessGrantedRef.current = true;
+        setHasAccess(true);
+        setIsChecking(false);
+        // Limpar qualquer timeout pendente
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+        // Debug
+        if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+          console.log("✅ [RouteGuard] Acesso concedido - admin ou merchant para rota compartilhada");
+        }
+        return;
+      } else {
+        // Debug
+        if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+          console.log("❌ [RouteGuard] Acesso negado - não é admin nem merchant:", {
+            userIsAdmin,
+            userIsMerchant,
+            userRole,
+            user: user?.email || user?.username || "N/A",
+          });
+        }
+        // Redirecionar para dashboard
+        if (!isRedirecting && !redirectingRef.current) {
+          redirectingRef.current = true;
+          setIsRedirecting(true);
+          router.replace("/").catch(() => {
+            window.location.href = "/";
           }).finally(() => {
             // Resetar isRedirecting após um tempo
             timeoutRef.current = setTimeout(() => {
@@ -739,7 +795,7 @@ export function RouteGuard({ children }: RouteGuardProps) {
     }
 
     // Se não é nenhuma rota específica, permitir acesso (pode ser rota pública ou dashboard)
-    if (!isAdminRoute && !isMerchantRoute && !isSharedRoute) {
+    if (!isAdminOnlyRoute && !isAdminAndMerchantRoute && !isMerchantRoute && !isSharedRoute) {
       accessGranted = true;
       // Debug
       if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
@@ -761,7 +817,8 @@ export function RouteGuard({ children }: RouteGuardProps) {
         userIsAdmin,
         userIsMerchant,
         userIsUser,
-        isAdminRoute,
+        isAdminOnlyRoute,
+        isAdminAndMerchantRoute,
         isMerchantRoute,
         isSharedRoute,
         hasAccessAntes: hasAccess,

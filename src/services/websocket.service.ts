@@ -107,6 +107,225 @@ class WebSocketService {
           }
         });
       });
+
+      // Escutar eventos de campanha criada
+      this.socket.on("campaign_created", (notification: NotificationData | any) => {
+        console.log("🎉 Campanha criada recebida via Socket.io:", {
+          type: notification.type,
+          title: notification.title,
+          message: notification.message?.substring(0, 100) || "",
+          campaignId: notification.campaign?.id,
+          timestamp: notification.timestamp,
+        });
+        console.log("🎉 Notificação completa de campanha:", notification);
+        
+        // Converter para formato de notificação padrão
+        const notificationData: NotificationData = {
+          type: notification.type || 'campaign_created',
+          title: notification.title || 'Nova Campanha',
+          message: notification.message || '',
+          data: notification.campaign || notification.data,
+          timestamp: notification.timestamp || new Date().toISOString(),
+        };
+        
+        // Notificar todos os handlers (tratar como notificação normal)
+        this.notificationHandlers.forEach(handler => {
+          try {
+            handler(notificationData);
+          } catch (error) {
+            console.error("❌ Erro ao processar notificação de campanha no handler:", error);
+          }
+        });
+      });
+
+      // Escutar eventos de compra confirmada
+      this.socket.on("purchase_confirmed", (notification: NotificationData | any) => {
+        console.log("✅ Compra confirmada recebida via Socket.io:", notification);
+        
+        const notificationData: NotificationData = {
+          type: notification.type || 'purchase_confirmed',
+          title: notification.title || 'Compra Confirmada',
+          message: notification.message || '',
+          data: notification.purchase || notification.data,
+          timestamp: notification.timestamp || new Date().toISOString(),
+        };
+        
+        this.notificationHandlers.forEach(handler => {
+          try {
+            handler(notificationData);
+          } catch (error) {
+            console.error("❌ Erro ao processar notificação de compra confirmada:", error);
+          }
+        });
+      });
+
+      // Escutar eventos de compra rejeitada
+      this.socket.on("purchase_rejected", (notification: NotificationData | any) => {
+        console.log("❌ Compra rejeitada recebida via Socket.io:", notification);
+        
+        const notificationData: NotificationData = {
+          type: notification.type || 'purchase_rejected',
+          title: notification.title || 'Compra Rejeitada',
+          message: notification.message || '',
+          data: notification.purchase || notification.data,
+          timestamp: notification.timestamp || new Date().toISOString(),
+        };
+        
+        this.notificationHandlers.forEach(handler => {
+          try {
+            handler(notificationData);
+          } catch (error) {
+            console.error("❌ Erro ao processar notificação de compra rejeitada:", error);
+          }
+        });
+      });
+
+      // Escutar eventos de compra de campanha validada
+      this.socket.on("campaign_purchase_validated", (notification: NotificationData | any) => {
+        console.log("✅ Compra de campanha validada recebida via Socket.io:", notification);
+        
+        const notificationData: NotificationData = {
+          type: notification.type || 'campaign_purchase_validated',
+          title: notification.title || 'Pagamento Aprovado!',
+          message: notification.message || '',
+          data: notification.purchase || notification.data || {
+            campaign_id: notification.campaign_id,
+            purchase_id: notification.purchase_id,
+            points_earned: notification.points_earned
+          },
+          timestamp: notification.timestamp || new Date().toISOString(),
+        };
+        
+        this.notificationHandlers.forEach(handler => {
+          try {
+            handler(notificationData);
+          } catch (error) {
+            console.error("❌ Erro ao processar notificação de compra de campanha validada:", error);
+          }
+        });
+      });
+
+      // Escutar eventos de compra de campanha rejeitada
+      this.socket.on("campaign_purchase_rejected", (notification: NotificationData | any) => {
+        console.log("❌ Compra de campanha rejeitada recebida via Socket.io:", notification);
+        
+        const notificationData: NotificationData = {
+          type: notification.type || 'campaign_purchase_rejected',
+          title: notification.title || 'Pagamento Rejeitado',
+          message: notification.message || '',
+          data: notification.purchase || notification.data || {
+            campaign_id: notification.campaign_id,
+            purchase_id: notification.purchase_id,
+            rejection_reason: notification.rejection_reason
+          },
+          timestamp: notification.timestamp || new Date().toISOString(),
+        };
+        
+        this.notificationHandlers.forEach(handler => {
+          try {
+            handler(notificationData);
+          } catch (error) {
+            console.error("❌ Erro ao processar notificação de compra de campanha rejeitada:", error);
+          }
+        });
+      });
+
+      // Escutar eventos de compra de campanha submetida
+      this.socket.on("campaign_purchase_submitted", (notification: NotificationData | any) => {
+        console.log("📤 Compra de campanha submetida recebida via Socket.io:", notification);
+        
+        const notificationData: NotificationData = {
+          type: notification.type || 'campaign_purchase_submitted',
+          title: notification.title || 'Pagamento Enviado',
+          message: notification.message || '',
+          data: notification.purchase || notification.data || {
+            campaign_id: notification.campaign_id,
+            purchase_id: notification.purchase_id
+          },
+          timestamp: notification.timestamp || new Date().toISOString(),
+        };
+        
+        this.notificationHandlers.forEach(handler => {
+          try {
+            handler(notificationData);
+          } catch (error) {
+            console.error("❌ Erro ao processar notificação de compra de campanha submetida:", error);
+          }
+        });
+      });
+
+      // Escutar eventos de compra de sorteio validada
+      this.socket.on("draw_purchase_validated", (notification: NotificationData | any) => {
+        console.log("✅ Compra de sorteio validada recebida via Socket.io:", notification);
+        
+        const notificationData: NotificationData = {
+          type: notification.type || 'draw_purchase_validated',
+          title: notification.title || 'Compra Aprovada!',
+          message: notification.message || '',
+          data: notification.purchase || notification.data || {
+            campaign_id: notification.campaign_id,
+            purchase_id: notification.purchase_id
+          },
+          timestamp: notification.timestamp || new Date().toISOString(),
+        };
+        
+        this.notificationHandlers.forEach(handler => {
+          try {
+            handler(notificationData);
+          } catch (error) {
+            console.error("❌ Erro ao processar notificação de compra de sorteio validada:", error);
+          }
+        });
+      });
+
+      // Escutar eventos de compra de sorteio rejeitada
+      this.socket.on("draw_purchase_rejected", (notification: NotificationData | any) => {
+        console.log("❌ Compra de sorteio rejeitada recebida via Socket.io:", notification);
+        
+        const notificationData: NotificationData = {
+          type: notification.type || 'draw_purchase_rejected',
+          title: notification.title || 'Compra Rejeitada',
+          message: notification.message || '',
+          data: notification.purchase || notification.data || {
+            campaign_id: notification.campaign_id,
+            purchase_id: notification.purchase_id,
+            rejection_reason: notification.rejection_reason
+          },
+          timestamp: notification.timestamp || new Date().toISOString(),
+        };
+        
+        this.notificationHandlers.forEach(handler => {
+          try {
+            handler(notificationData);
+          } catch (error) {
+            console.error("❌ Erro ao processar notificação de compra de sorteio rejeitada:", error);
+          }
+        });
+      });
+
+      // Escutar eventos de compra de sorteio submetida
+      this.socket.on("draw_purchase_submitted", (notification: NotificationData | any) => {
+        console.log("📤 Compra de sorteio submetida recebida via Socket.io:", notification);
+        
+        const notificationData: NotificationData = {
+          type: notification.type || 'draw_purchase_submitted',
+          title: notification.title || 'Compra Enviada',
+          message: notification.message || '',
+          data: notification.purchase || notification.data || {
+            campaign_id: notification.campaign_id,
+            purchase_id: notification.purchase_id
+          },
+          timestamp: notification.timestamp || new Date().toISOString(),
+        };
+        
+        this.notificationHandlers.forEach(handler => {
+          try {
+            handler(notificationData);
+          } catch (error) {
+            console.error("❌ Erro ao processar notificação de compra de sorteio submetida:", error);
+          }
+        });
+      });
       
       // Escutar todos os eventos para debug (remover em produção se necessário)
       if (process.env.NODE_ENV === "development") {

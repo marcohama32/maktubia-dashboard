@@ -1,13 +1,15 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/AuthContext";
-import { campaignsService, Campaign, GetAllCampaignsParams } from "@/services/campaigns.service";
+import { campaignsService, Campaign, GetAllCampaignsParams, campaignPurchasesService } from "@/services/campaigns.service";
+import { drawCampaignsService } from "@/services/drawCampaigns.service";
 import { establishmentService } from "@/services/establishment.service";
 import { merchantsService } from "@/services/merchants.service";
 import { isAdmin, isMerchant, isUser, isClient } from "@/utils/roleUtils";
 import { ConfirmModal } from "@/components/modals/ConfirmModal";
 import { AlertModal } from "@/components/modals/AlertModal";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { websocketService } from "@/services/websocket.service";
 import {
   PieChart,
   Pie,
@@ -77,6 +79,18 @@ function CampaignsPageContent() {
   const [participatingCampaignId, setParticipatingCampaignId] = useState<string | number | null>(null);
   const [reservationCode, setReservationCode] = useState<string | null>(null);
   const [showReservationModal, setShowReservationModal] = useState(false);
+  
+  // Estados para submissão de compra (campanhas automáticas)
+  const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [purchaseAmount, setPurchaseAmount] = useState("");
+  const [notes, setNotes] = useState("");
+  const [receiptPhoto, setReceiptPhoto] = useState<File | null>(null);
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  
+  // Estado para contagem de pagamentos por campanha (apenas para clientes)
+  const [purchasesCountByCampaign, setPurchasesCountByCampaign] = useState<Record<string, number>>({});
 
   // Carregar estabelecimentos primeiro
   useEffect(() => {
@@ -150,6 +164,252 @@ function CampaignsPageContent() {
       }
     }
   }, [statusFilter, establishmentFilter, typeFilter, debouncedSearchTerm, establishments.length, loadingEstablishments]);
+
+  // Carregar contagem de pagamentos para campanhas automáticas (apenas para clientes)
+  useEffect(() => {
+    if (isClient(user) && allCampaigns.length > 0) {
+      loadPurchasesCount();
+    }
+  }, [allCampaigns, user]);
+
+  // Escutar eventos WebSocket para atualização em tempo real
+  useEffect(() => {
+    if (!user?.user_id) return;
+
+    const socket = websocketService.getSocket();
+    if (!socket) return;
+
+    // Eventos para clientes
+    if (isClient(user)) {
+      // Evento quando um pagamento é submetido
+      const handlePurchaseSubmitted = (data: any) => {
+        console.log('📥 [WEBSOCKET] Pagamento submetido:', data);
+        if (data.user_id === String(user.user_id)) {
+          // Recarregar campanhas para atualizar estatísticas
+          loadCampaigns();
+        }
+      };
+
+      // Evento quando um pagamento é validado
+      const handlePurchaseValidated = (data: any) => {
+        console.log('📥 [WEBSOCKET] Pagamento validado:', data);
+        if (data.user_id === String(user.user_id)) {
+          // Mostrar notificação de sucesso
+          setAlertConfig({
+            title: "Pagamento Aprovado!",
+            message: data.message || `Seu pagamento foi aprovado! Você ganhou ${data.points_earned || 0} pontos.`,
+            type: "success",
+          });
+          setAlertModalOpen(true);
+          // Recarregar campanhas para atualizar estatísticas
+          loadCampaigns();
+        }
+      };
+
+      // Evento quando um pagamento é rejeitado
+      const handlePurchaseRejected = (data: any) => {
+        console.log('📥 [WEBSOCKET] Pagamento rejeitado:', data);
+        if (data.user_id === String(user.user_id)) {
+          // Mostrar notificação de rejeição
+          setAlertConfig({
+            title: "Pagamento Rejeitado",
+            message: data.message || "Seu pagamento foi rejeitado pelo merchant.",
+            type: "error",
+          });
+          setAlertModalOpen(true);
+          // Recarregar campanhas para atualizar estatísticas
+          loadCampaigns();
+        }
+      };
+
+      socket.on('campaign_purchase_submitted', handlePurchaseSubmitted);
+      socket.on('campaign_purchase_validated', handlePurchaseValidated);
+      socket.on('campaign_purchase_rejected', handlePurchaseRejected);
+      
+      // Eventos para campanhas de sorteio
+      const handleDrawPurchaseSubmitted = (data: any) => {
+        console.log('📥 [WEBSOCKET] Compra de sorteio submetida:', data);
+        if (data.user_id === String(user.user_id)) {
+          setAlertConfig({
+            title: "Compra Enviada!",
+            message: "Sua compra foi enviada com sucesso! Aguarde a validação do merchant.",
+            type: "success",
+          });
+          setAlertModalOpen(true);
+          loadCampaigns();
+        }
+      };
+
+      const handleDrawPurchaseValidated = (data: any) => {
+        console.log('📥 [WEBSOCKET] Compra de sorteio validada:', data);
+        if (data.user_id === String(user.user_id)) {
+          setAlertConfig({
+            title: "Compra Validada!",
+            message: "Sua compra foi validada! Suas chances no sorteio aumentaram!",
+            type: "success",
+          });
+          setAlertModalOpen(true);
+          loadCampaigns();
+        }
+      };
+
+      const handleDrawPurchaseRejected = (data: any) => {
+        console.log('📥 [WEBSOCKET] Compra de sorteio rejeitada:', data);
+        if (data.user_id === String(user.user_id)) {
+          setAlertConfig({
+            title: "Compra Rejeitada",
+            message: data.message || "Sua compra foi rejeitada pelo merchant.",
+            type: "error",
+          });
+          setAlertModalOpen(true);
+          loadCampaigns();
+        }
+      };
+
+      socket.on('draw_purchase_submitted', handleDrawPurchaseSubmitted);
+      socket.on('draw_purchase_validated', handleDrawPurchaseValidated);
+      socket.on('draw_purchase_rejected', handleDrawPurchaseRejected);
+
+      return () => {
+        socket.off('campaign_purchase_submitted', handlePurchaseSubmitted);
+        socket.off('campaign_purchase_validated', handlePurchaseValidated);
+        socket.off('campaign_purchase_rejected', handlePurchaseRejected);
+        socket.off('draw_purchase_submitted', handleDrawPurchaseSubmitted);
+        socket.off('draw_purchase_validated', handleDrawPurchaseValidated);
+        socket.off('draw_purchase_rejected', handleDrawPurchaseRejected);
+      };
+    }
+
+    // Eventos para admin/merchant
+    if (isAdmin(user) || isMerchant(user)) {
+      // Evento quando há novo pagamento pendente
+      const handlePurchasePending = async (data: any) => {
+        console.log('📥 [WEBSOCKET] Novo pagamento pendente:', data);
+        
+        // Verificar se é do estabelecimento do merchant (se for merchant)
+        if (isMerchant(user) && !isAdmin(user)) {
+          // Verificar se o merchant tem acesso ao estabelecimento
+          const establishmentId = data.establishment_id;
+          if (establishmentId) {
+            try {
+              // Buscar estabelecimentos do merchant
+              const response = await merchantsService.getMyEstablishments();
+              const merchantEstablishments = response.data || [];
+              const hasAccess = merchantEstablishments.some((est: any) => 
+                String(est.id || est.est_id || est.establishment_id) === String(establishmentId)
+              );
+              
+              if (!hasAccess) {
+                console.log('📥 [WEBSOCKET] Merchant não tem acesso a este estabelecimento, ignorando notificação');
+                return;
+              }
+            } catch (err) {
+              console.error('Erro ao verificar acesso do merchant:', err);
+              return;
+            }
+          }
+        }
+        
+        // Mostrar notificação
+        setAlertConfig({
+          title: "Novo Pagamento Pendente!",
+          message: data.message || `Novo pagamento de ${data.purchase_amount?.toLocaleString("pt-MZ")} MT aguardando validação na campanha "${data.campaign_name}".`,
+          type: "info",
+        });
+        setAlertModalOpen(true);
+        // Recarregar campanhas para atualizar contagem
+        loadCampaigns();
+      };
+
+      // Evento quando status de pagamento muda
+      const handlePurchaseStatusChanged = (data: any) => {
+        console.log('📥 [WEBSOCKET] Status de pagamento alterado:', data);
+        // Recarregar campanhas para atualizar contagem
+        loadCampaigns();
+      };
+
+      socket.on('campaign_purchase_pending', handlePurchasePending);
+      socket.on('campaign_purchase_status_changed', handlePurchaseStatusChanged);
+      
+      // Eventos para campanhas de sorteio (admin/merchant)
+      const handleDrawPurchasePending = async (data: any) => {
+        console.log('📥 [WEBSOCKET] Nova compra de sorteio pendente:', data);
+        
+        // Verificar se é do estabelecimento do merchant (se for merchant)
+        if (isMerchant(user) && !isAdmin(user)) {
+          const establishmentId = data.establishment_id;
+          if (establishmentId) {
+            try {
+              const response = await merchantsService.getMyEstablishments();
+              const merchantEstablishments = response.data || [];
+              const hasAccess = merchantEstablishments.some((est: any) => 
+                String(est.id || est.est_id || est.establishment_id) === String(establishmentId)
+              );
+              
+              if (!hasAccess) {
+                console.log('📥 [WEBSOCKET] Merchant não tem acesso a este estabelecimento, ignorando notificação');
+                return;
+              }
+            } catch (err) {
+              console.error('Erro ao verificar acesso do merchant:', err);
+              return;
+            }
+          }
+        }
+        
+        setAlertConfig({
+          title: "Nova Compra de Sorteio Pendente!",
+          message: data.message || `Nova compra de ${data.purchase_amount?.toLocaleString("pt-MZ")} MT aguardando validação na campanha de sorteio "${data.campaign_name}".`,
+          type: "info",
+        });
+        setAlertModalOpen(true);
+        loadCampaigns();
+      };
+
+      const handleDrawPurchaseStatusChanged = (data: any) => {
+        console.log('📥 [WEBSOCKET] Status de compra de sorteio alterado:', data);
+        loadCampaigns();
+      };
+
+      socket.on('draw_purchase_pending', handleDrawPurchasePending);
+      socket.on('draw_purchase_status_changed', handleDrawPurchaseStatusChanged);
+
+      return () => {
+        socket.off('campaign_purchase_pending', handlePurchasePending);
+        socket.off('campaign_purchase_status_changed', handlePurchaseStatusChanged);
+        socket.off('draw_purchase_pending', handleDrawPurchasePending);
+        socket.off('draw_purchase_status_changed', handleDrawPurchaseStatusChanged);
+      };
+    }
+  }, [user, allCampaigns.length]);
+
+  const loadPurchasesCount = async () => {
+    if (!isClient(user)) return;
+    
+    try {
+      // Buscar todas as compras do cliente para campanhas automáticas
+      const response = await campaignPurchasesService.getMyPurchases(undefined, {
+        page: 1,
+        limit: 1000
+      });
+      
+      const purchases = response?.data || response || [];
+      const countMap: Record<string, number> = {};
+      
+      // Contar pagamentos por campanha
+      purchases.forEach((purchase: any) => {
+        const campaignId = purchase.campaign_id || purchase.campaignId;
+        if (campaignId) {
+          countMap[campaignId] = (countMap[campaignId] || 0) + 1;
+        }
+      });
+      
+      setPurchasesCountByCampaign(countMap);
+    } catch (err: any) {
+      console.error("Erro ao carregar contagem de pagamentos:", err);
+      // Não mostrar erro, apenas não carregar contagem
+    }
+  };
 
   // Debounce da pesquisa
   useEffect(() => {
@@ -408,6 +668,121 @@ function CampaignsPageContent() {
     }
   };
 
+  const handleOpenSubmitModal = (campaign: Campaign) => {
+    setSelectedCampaign(campaign);
+    setPurchaseAmount("");
+    setNotes("");
+    setReceiptPhoto(null);
+    setReceiptPreview(null);
+    setShowSubmitModal(true);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setReceiptPhoto(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setReceiptPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSubmitPurchase = async () => {
+    if (!selectedCampaign) return;
+
+    if (!purchaseAmount || parseFloat(purchaseAmount) <= 0) {
+      setAlertConfig({
+        title: "Erro!",
+        message: "Por favor, informe um valor de compra válido.",
+        type: "error",
+      });
+      setAlertModalOpen(true);
+      return;
+    }
+
+    const campaignType = selectedCampaign.type || selectedCampaign.typeLabel || "";
+    const isDrawCampaign = campaignType === 'RewardType_Draw' || 
+                           campaignType === 'Sorteio' ||
+                           campaignType?.toLowerCase()?.includes('draw') ||
+                           campaignType?.toLowerCase()?.includes('sorteio');
+    
+    // Para campanhas automáticas, validar valor mínimo
+    if (!isDrawCampaign) {
+      const minAmount = (selectedCampaign as any).min_purchase_amount || 0;
+      if (parseFloat(purchaseAmount) < minAmount) {
+        setAlertConfig({
+          title: "Erro!",
+          message: `O valor da compra deve ser pelo menos ${minAmount.toLocaleString("pt-MZ")} MT (valor mínimo da campanha).`,
+          type: "error",
+        });
+        setAlertModalOpen(true);
+        return;
+      }
+    }
+
+    try {
+      setSubmitting(true);
+      
+      const campaignId = selectedCampaign.campaign_id || selectedCampaign.id || "";
+      
+      if (isDrawCampaign) {
+        // Submeter compra para campanha de sorteio
+        await drawCampaignsService.submitPurchase(campaignId, {
+          purchase_amount: parseFloat(purchaseAmount),
+          notes: notes || undefined,
+          receipt_photo: receiptPhoto || undefined,
+        });
+
+        setAlertConfig({
+          title: "Sucesso!",
+          message: "Compra submetida com sucesso! Aguarde a validação do merchant. Cada compra validada aumenta suas chances no sorteio!",
+          type: "success",
+        });
+      } else {
+        // Submeter compra para campanha automática
+        await campaignPurchasesService.submitPurchase(campaignId, {
+          purchase_amount: parseFloat(purchaseAmount),
+          notes: notes || undefined,
+          receipt_photo: receiptPhoto || undefined,
+        });
+
+        setAlertConfig({
+          title: "Sucesso!",
+          message: "Compra submetida com sucesso! Aguarde a validação do merchant para receber seus pontos.",
+          type: "success",
+        });
+      }
+      
+      setAlertModalOpen(true);
+      
+      setShowSubmitModal(false);
+      setSelectedCampaign(null);
+      setPurchaseAmount("");
+      setNotes("");
+      setReceiptPhoto(null);
+      setReceiptPreview(null);
+      
+      // Recarregar campanhas e contagem de pagamentos para atualizar imediatamente
+      // O WebSocket também atualizará quando o backend processar
+      await loadCampaigns();
+      if (isClient(user)) {
+        loadPurchasesCount();
+      }
+    } catch (err: any) {
+      console.error("Erro ao submeter compra:", err);
+      setAlertConfig({
+        title: "Erro!",
+        message: err.message || "Erro ao submeter compra. Tente novamente.",
+        type: "error",
+      });
+      setAlertModalOpen(true);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // Filtrar e ordenar campanhas
   const filteredAndSortedCampaigns = useMemo(() => {
     let filtered = [...allCampaigns];
@@ -416,7 +791,11 @@ function CampaignsPageContent() {
     if (debouncedSearchTerm) {
       const searchLower = debouncedSearchTerm.toLowerCase();
       filtered = filtered.filter(campaign => {
-        const name = (campaign.campaignName || campaign.campaign_name || campaign.name || campaign.description || "").toLowerCase();
+        // Para campanhas automáticas, usar benefit_description como nome
+        const name = (campaign.type === 'RewardType_Auto' 
+          ? (campaign.benefit_description || campaign.campaignName || campaign.campaign_name || campaign.name || campaign.description || "")
+          : (campaign.campaignName || campaign.campaign_name || campaign.name || campaign.description || "")
+        ).toLowerCase();
         const description = (campaign.description || campaign.reward_description || "").toLowerCase();
         const establishmentName = (
           campaign.establishmentName ||
@@ -463,21 +842,30 @@ function CampaignsPageContent() {
           return new Date(bCreatedAt).getTime() - new Date(aCreatedAt).getTime(); // DESC
         }
         
-        // Fallback: ordenar por campaign_id (string ou número)
-        // Se for string, comparar alfabeticamente (mais recente = maior valor)
-        // Se for número, comparar numericamente
-        const aId = a.campaign_id || a.id || '';
-        const bId = b.campaign_id || b.id || '';
+        // Fallback: extrair timestamp do campaign_id e ordenar por ele
+        const aId = String(a.campaign_id || a.id || '');
+        const bId = String(b.campaign_id || b.id || '');
         
-        // Se ambos são strings, comparar alfabeticamente (ordem reversa para DESC)
-        if (typeof aId === 'string' && typeof bId === 'string') {
-          return bId.localeCompare(aId); // DESC - strings maiores primeiro
+        // Extrair timestamp de 13 dígitos do ID (formato: CAMP_xxx_TIMESTAMP_xxx)
+        const extractTimestamp = (id: string): number => {
+          const match = id.match(/(\d{13})/);
+          return match ? parseInt(match[1]) : 0;
+        };
+        
+        const aTimestamp = extractTimestamp(aId);
+        const bTimestamp = extractTimestamp(bId);
+        
+        // Se ambos têm timestamp, ordenar por timestamp (mais recente primeiro)
+        if (aTimestamp > 0 && bTimestamp > 0) {
+          return bTimestamp - aTimestamp; // DESC
         }
         
-        // Se ambos são números, comparar numericamente
-        const aNum = parseInt(String(aId)) || 0;
-        const bNum = parseInt(String(bId)) || 0;
-        return bNum - aNum; // DESC
+        // Se apenas um tem timestamp, ele vem primeiro
+        if (aTimestamp > 0 && bTimestamp === 0) return -1;
+        if (bTimestamp > 0 && aTimestamp === 0) return 1;
+        
+        // Se nenhum tem timestamp, ordenar alfabeticamente (ordem reversa para DESC)
+        return bId.localeCompare(aId); // DESC
       });
     } else {
       filtered.sort((a, b) => {
@@ -880,12 +1268,43 @@ function CampaignsPageContent() {
             ) : (
               (paginatedCampaigns || []).map((campaign) => (
                 <tr key={campaign.campaign_id || campaign.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {campaign.campaignName || campaign.campaign_name || campaign.name || campaign.description || "Sem nome"}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      {campaign.reward_description || campaign.description || ""}
+                  <td className="px-6 py-4">
+                    <div className="max-w-lg min-w-[300px]">
+                      {(() => {
+                        // Determinar o nome principal da campanha (sem usar description como fallback)
+                        const mainName = campaign.type === 'RewardType_Auto' 
+                          ? (campaign.benefit_description || campaign.campaignName || campaign.campaign_name || campaign.name || "Sem nome")
+                          : campaign.type === 'RewardType_Draw'
+                          ? (campaign.participation_criteria || campaign.campaignName || campaign.campaign_name || campaign.name || "Sem nome")
+                          : (campaign.campaignName || campaign.campaign_name || campaign.name || "Sem nome");
+                        
+                        // Determinar a descrição secundária (só mostrar se for diferente do nome principal e não vazia)
+                        let secondaryDescription = null;
+                        if (campaign.type !== 'RewardType_Auto' && campaign.type !== 'RewardType_Draw') {
+                          const rewardDesc = campaign.reward_description?.trim();
+                          const desc = campaign.description?.trim();
+                          
+                          // Só mostrar se for diferente do nome principal e não vazio
+                          if (rewardDesc && rewardDesc !== mainName && rewardDesc.length > 0) {
+                            secondaryDescription = rewardDesc;
+                          } else if (desc && desc !== mainName && desc.length > 0) {
+                            secondaryDescription = desc;
+                          }
+                        }
+                        
+                        return (
+                          <>
+                            <div className="text-sm font-medium text-gray-900 break-words whitespace-normal">
+                              {mainName}
+                            </div>
+                            {secondaryDescription && (
+                              <div className="text-xs text-gray-500 mt-1 break-words whitespace-normal">
+                                {secondaryDescription}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -924,25 +1343,346 @@ function CampaignsPageContent() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                      {translateCampaignType(campaign.typeLabel || campaign.type || (campaign.accumulation_rate ? "points_per_spend" : "points"))}
-                    </span>
-                    {campaign.typeDescription && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        {campaign.typeDescription}
-                      </div>
-                    )}
-                    {/* Mostrar contagem de participações */}
-                    {campaign.participationsCount !== undefined && (
-                      <div className={`text-xs mt-1 font-medium ${
-                        campaign.participationsCount > 0 ? 'text-green-600' : 'text-gray-400'
-                      }`}>
-                        {campaign.participationsCount > 0 
-                          ? `${campaign.participationsCount} código(s) gerado(s)`
-                          : 'Nenhum código gerado'
+                    <div className="flex flex-col gap-2">
+                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                        {translateCampaignType(campaign.typeLabel || campaign.type || (campaign.accumulation_rate ? "points_per_spend" : "points"))}
+                      </span>
+                      {campaign.typeDescription && (
+                        <div className="text-xs text-gray-500">
+                          {campaign.typeDescription}
+                        </div>
+                      )}
+                      {/* Indicadores - mostrar apenas um por vez */}
+                      {(() => {
+                        const campaignType = campaign.type || campaign.typeLabel || "";
+                        const hasBenefitDescription = !!(campaign as any).benefit_description;
+                        const isAutoCampaign = campaignType === 'RewardType_Auto' || 
+                                               campaignType === 'Oferta Automática' ||
+                                               campaignType?.toLowerCase()?.includes('auto') ||
+                                               hasBenefitDescription;
+                        
+                        const isDrawCampaign = campaignType === 'RewardType_Draw' || 
+                                               campaignType === 'Sorteio' ||
+                                               campaignType?.toLowerCase()?.includes('draw') ||
+                                               campaignType?.toLowerCase()?.includes('sorteio') ||
+                                               !!(campaign as any).participation_criteria;
+                        
+                        // Para clientes em campanhas de sorteio: mostrar estatísticas de compras
+                        if (isClient(user) && isDrawCampaign) {
+                          const drawStats = (campaign as any).drawPurchaseStats;
+                          
+                          if (drawStats) {
+                            const { approved_count, pending_count, approved_amount, pending_amount } = drawStats;
+                            const totalApproved = approved_count || 0;
+                            const totalPending = pending_count || 0;
+                            const totalAmount = approved_amount || 0;
+                            const totalPendingAmount = pending_amount || 0;
+                            
+                            return (
+                              <div className="mt-1 flex flex-col gap-1.5">
+                                {/* Compras aprovadas */}
+                                {totalApproved > 0 && (
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    {totalApproved} {totalApproved === 1 ? 'compra aprovada' : 'compras aprovadas'}
+                                    {totalAmount > 0 && (
+                                      <span className="ml-1">• {totalAmount.toLocaleString("pt-MZ")} MT</span>
+                                    )}
+                                  </div>
+                                )}
+                                
+                                {/* Compras pendentes */}
+                                {totalPending > 0 && (
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    {totalPending} {totalPending === 1 ? 'compra pendente' : 'compras pendentes'}
+                                    {totalPendingAmount > 0 && (
+                                      <span className="ml-1">• {totalPendingAmount.toLocaleString("pt-MZ")} MT</span>
+                                    )}
+                                  </div>
+                                )}
+                                
+                                {/* Se não há compras */}
+                                {totalApproved === 0 && totalPending === 0 && (
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    Nenhuma compra enviada
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          } else {
+                            // Fallback para quando não há estatísticas
+                            return (
+                              <div className="mt-1">
+                                <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
+                                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  Nenhuma compra enviada
+                                </div>
+                              </div>
+                            );
+                          }
                         }
-                      </div>
-                    )}
+                        
+                        // Para clientes em campanhas automáticas: mostrar estatísticas detalhadas de pagamentos
+                        if (isClient(user) && isAutoCampaign) {
+                          const purchaseStats = (campaign as any).purchaseStats;
+                          const minPurchaseAmount = (campaign as any).min_purchase_amount || 0;
+                          
+                          if (purchaseStats) {
+                            const { approved_count, pending_count, approved_amount, pending_amount, approved_points } = purchaseStats;
+                            const totalApproved = approved_count || 0;
+                            const totalPending = pending_count || 0;
+                            const totalAmount = approved_amount || 0;
+                            const totalPendingAmount = pending_amount || 0;
+                            const totalPoints = approved_points || 0;
+                            const remaining = minPurchaseAmount > 0 ? Math.max(0, minPurchaseAmount - totalAmount) : 0;
+                            
+                            return (
+                              <div className="mt-1 flex flex-col gap-1.5">
+                                {/* Pagamentos aprovados */}
+                                {totalApproved > 0 && (
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    {totalApproved} {totalApproved === 1 ? 'pagamento aprovado' : 'pagamentos aprovados'}
+                                    {totalAmount > 0 && (
+                                      <span className="ml-1">• {totalAmount.toLocaleString("pt-MZ")} MT</span>
+                                    )}
+                                    {totalPoints > 0 && (
+                                      <span className="ml-1">• {totalPoints} pontos</span>
+                                    )}
+                                  </div>
+                                )}
+                                
+                                {/* Pagamentos pendentes */}
+                                {totalPending > 0 && (
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    {totalPending} {totalPending === 1 ? 'pagamento pendente' : 'pagamentos pendentes'}
+                                    {totalPendingAmount > 0 && (
+                                      <span className="ml-1">• {totalPendingAmount.toLocaleString("pt-MZ")} MT</span>
+                                    )}
+                                  </div>
+                                )}
+                                
+                                {/* Quanto falta */}
+                                {minPurchaseAmount > 0 && remaining > 0 && (
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                    </svg>
+                                    Faltam {remaining.toLocaleString("pt-MZ")} MT para atingir o objetivo
+                                  </div>
+                                )}
+                                
+                                {/* Se não há pagamentos */}
+                                {totalApproved === 0 && totalPending === 0 && (
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    Nenhum pagamento enviado
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          } else {
+                            // Fallback para quando não há estatísticas (usar contagem simples)
+                            const campaignId = campaign.campaign_id || campaign.id || campaign.campaign_number;
+                            const purchasesCount = campaignId ? (purchasesCountByCampaign[campaignId] || 0) : 0;
+                            
+                            return (
+                              <div className="mt-1">
+                                {purchasesCount > 0 ? (
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    {purchasesCount} {purchasesCount === 1 ? 'pagamento enviado' : 'pagamentos enviados'}
+                                  </div>
+                                ) : (
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    Nenhum pagamento enviado
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
+                        }
+                        
+                        // Para admin/merchant em campanhas de sorteio: mostrar estatísticas completas
+                        if ((isAdmin(user) || isMerchant(user)) && isDrawCampaign) {
+                          const drawStats = (campaign as any).drawPurchaseStatsForAdmin;
+                          if (drawStats) {
+                            const total = drawStats.total || 0;
+                            const pending = drawStats.pending || 0;
+                            const validated = drawStats.validated || 0;
+                            
+                            return (
+                              <div className="mt-1 flex flex-col gap-1.5">
+                                {/* Total de compras */}
+                                {total > 0 && (
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                                    </svg>
+                                    {total} {total === 1 ? 'compra realizada' : 'compras realizadas'}
+                                  </div>
+                                )}
+                                
+                                {/* Compras pendentes */}
+                                {pending > 0 && (
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800 animate-pulse">
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    {pending} {pending === 1 ? 'compra pendente' : 'compras pendentes'}
+                                  </div>
+                                )}
+                                
+                                {/* Compras aprovadas */}
+                                {validated > 0 && (
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    {validated} {validated === 1 ? 'compra aprovada' : 'compras aprovadas'}
+                                  </div>
+                                )}
+                                
+                                {/* Se não há compras */}
+                                {total === 0 && (
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                                    </svg>
+                                    Nenhuma compra ainda
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          } else {
+                            // Fallback se não houver estatísticas
+                            return (
+                              <div className="mt-1">
+                                <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
+                                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                                  </svg>
+                                  Nenhuma compra ainda
+                                </div>
+                              </div>
+                            );
+                          }
+                        }
+                        
+                        // Para admin/merchant em campanhas automáticas: mostrar estatísticas completas
+                        if ((isAdmin(user) || isMerchant(user)) && isAutoCampaign) {
+                          const stats = (campaign as any).purchaseStatsForAdmin;
+                          if (stats) {
+                            const total = stats.total || 0;
+                            const pending = stats.pending || 0;
+                            const validated = stats.validated || 0;
+                            
+                            return (
+                              <div className="mt-1 flex flex-col gap-1.5">
+                                {/* Total de compras */}
+                                {total > 0 && (
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                                    </svg>
+                                    {total} {total === 1 ? 'compra realizada' : 'compras realizadas'}
+                                  </div>
+                                )}
+                                
+                                {/* Pagamentos pendentes */}
+                                {pending > 0 && (
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800 animate-pulse">
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    {pending} {pending === 1 ? 'pagamento pendente' : 'pagamentos pendentes'}
+                                  </div>
+                                )}
+                                
+                                {/* Pagamentos aprovados */}
+                                {validated > 0 && (
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    {validated} {validated === 1 ? 'pagamento aprovado' : 'pagamentos aprovados'}
+                                  </div>
+                                )}
+                                
+                                {/* Se não há compras */}
+                                {total === 0 && (
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                                    </svg>
+                                    Nenhuma compra ainda
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          } else {
+                            // Fallback se não houver estatísticas
+                            return (
+                              <div className="mt-1">
+                                <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
+                                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                                  </svg>
+                                  Nenhuma compra ainda
+                                </div>
+                              </div>
+                            );
+                          }
+                        }
+                        
+                        // Para campanhas que usam códigos de reserva (ex: RewardType_Booking): mostrar indicador de códigos
+                        // Não mostrar para campanhas automáticas ou de compras
+                        const usesReservationCodes = campaignType === 'RewardType_Booking' || 
+                                                     campaignType === 'Oferta de Desconto por Marcação' ||
+                                                     campaignType?.toLowerCase()?.includes('booking') ||
+                                                     campaignType?.toLowerCase()?.includes('reserva');
+                        
+                        if (usesReservationCodes && campaign.participationsCount !== undefined) {
+                          return (
+                            <div className={`text-xs mt-1 font-medium ${
+                              campaign.participationsCount > 0 ? 'text-green-600' : 'text-gray-400'
+                            }`}>
+                              {campaign.participationsCount > 0 
+                                ? `${campaign.participationsCount} código(s) gerado(s)`
+                                : 'Nenhum código gerado'
+                              }
+                            </div>
+                          );
+                        }
+                        
+                        // Para outras campanhas que não são automáticas nem de reserva, não mostrar nada
+                        return null;
+                        
+                        return null;
+                      })()}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -959,8 +1699,8 @@ function CampaignsPageContent() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
-                      {campaign.validFrom || campaign.valid_from || campaign.start_date ? (
-                        new Date(campaign.validFrom || campaign.valid_from || campaign.start_date).toLocaleDateString("pt-MZ", {
+                      {(campaign.validFrom || campaign.valid_from || campaign.start_date || campaign.draw_start_date) ? (
+                        new Date(campaign.draw_start_date || campaign.validFrom || campaign.valid_from || campaign.start_date).toLocaleDateString("pt-MZ", {
                           day: "2-digit",
                           month: "2-digit",
                           year: "numeric"
@@ -972,9 +1712,9 @@ function CampaignsPageContent() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
-                      {campaign.validUntil || campaign.valid_until || campaign.end_date ? (
+                      {(campaign.validUntil || campaign.valid_until || campaign.end_date || campaign.draw_end_date) ? (
                         <>
-                          {new Date(campaign.validUntil || campaign.valid_until || campaign.end_date).toLocaleDateString("pt-MZ", {
+                          {new Date(campaign.draw_end_date || campaign.validUntil || campaign.valid_until || campaign.end_date).toLocaleDateString("pt-MZ", {
                             day: "2-digit",
                             month: "2-digit",
                             year: "numeric"
@@ -1005,8 +1745,60 @@ function CampaignsPageContent() {
                       </button>
                       {/* Botão Participar ou Código - apenas para clientes */}
                       {isClient(user) && (() => {
-                        // Verificar se a campanha permite participação
                         const campaignType = campaign.type || campaign.typeLabel || "";
+                        const hasBenefitDescription = !!(campaign as any).benefit_description;
+                        
+                        // Para campanhas automáticas e de sorteio, mostrar botão "Enviar Compra"
+                        const isAutoCampaign = campaignType === 'RewardType_Auto' || 
+                                               campaignType === 'Oferta Automática' ||
+                                               campaignType?.toLowerCase()?.includes('auto') ||
+                                               hasBenefitDescription;
+                        
+                        const isDrawCampaign = campaignType === 'RewardType_Draw' || 
+                                               campaignType === 'Sorteio' ||
+                                               campaignType?.toLowerCase()?.includes('draw') ||
+                                               campaignType?.toLowerCase()?.includes('sorteio') ||
+                                               !!(campaign as any).participation_criteria;
+                        
+                        if (isAutoCampaign || isDrawCampaign) {
+                          const validFrom = campaign.validFrom || campaign.valid_from || campaign.start_date || (campaign as any).draw_start_date;
+                          const validUntil = campaign.validUntil || campaign.valid_until || campaign.end_date || (campaign as any).draw_end_date;
+                          const now = new Date();
+                          const isExpired = validUntil && new Date(validUntil) < now;
+                          const notStarted = validFrom && new Date(validFrom) > now;
+                          const isActive = campaign.isActive !== false && campaign.is_active !== false;
+                          const canSubmit = isActive && !isExpired && !notStarted;
+                          
+                          return (
+                            <button
+                              onClick={() => handleOpenSubmitModal(campaign)}
+                              disabled={!canSubmit}
+                              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                                canSubmit
+                                  ? "bg-blue-600 text-white hover:bg-blue-700"
+                                  : "bg-gray-400 text-white cursor-not-allowed"
+                              }`}
+                              title={
+                                isExpired 
+                                  ? "Campanha expirada"
+                                  : notStarted
+                                  ? "Campanha ainda não começou"
+                                  : !isActive
+                                  ? "Campanha inativa"
+                                  : isDrawCampaign
+                                  ? "Enviar compra para aumentar suas chances no sorteio"
+                                  : "Enviar compra para validação"
+                              }
+                            >
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                              </svg>
+                              Enviar Compra
+                            </button>
+                          );
+                        }
+                        
+                        // Verificar se a campanha permite participação
                         const hasBookingFields = 
                           (campaign as any).booking_discount_type || 
                           (campaign as any).booking_discount_value;
@@ -1445,6 +2237,118 @@ function CampaignsPageContent() {
               >
                 Fechar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Submissão de Compra (Campanhas Automáticas) */}
+      {showSubmitModal && selectedCampaign && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Enviar Compra</h2>
+              <button
+                onClick={() => {
+                  setShowSubmitModal(false);
+                  setSelectedCampaign(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+                disabled={submitting}
+              >
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">
+                <strong>Campanha:</strong> {(selectedCampaign as any).benefit_description || selectedCampaign.campaignName || selectedCampaign.campaign_name || selectedCampaign.name || "Campanha Automática"}
+              </p>
+              {(selectedCampaign as any).min_purchase_amount && (
+                <p className="text-sm text-gray-600 mb-2">
+                  <strong>Valor Mínimo:</strong> {(selectedCampaign as any).min_purchase_amount.toLocaleString("pt-MZ")} MT
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="purchase_amount" className="block text-sm font-medium text-gray-700 mb-2">
+                  Valor da Compra (MT) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  id="purchase_amount"
+                  value={purchaseAmount}
+                  onChange={(e) => setPurchaseAmount(e.target.value)}
+                  min={(selectedCampaign as any).min_purchase_amount || 0}
+                  step="0.01"
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                  placeholder="Ex: 2000.00"
+                  disabled={submitting}
+                  required
+                />
+              </div>
+
+              <div>
+                <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-2">
+                  Observações (opcional)
+                </label>
+                <textarea
+                  id="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={3}
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                  placeholder="Informações adicionais sobre a compra..."
+                  disabled={submitting}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="receipt_photo" className="block text-sm font-medium text-gray-700 mb-2">
+                  Foto do Recibo (opcional)
+                </label>
+                <input
+                  type="file"
+                  id="receipt_photo"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  disabled={submitting}
+                />
+                {receiptPreview && (
+                  <div className="mt-2">
+                    <img src={receiptPreview} alt="Preview do recibo" className="max-w-full h-auto rounded-lg border border-gray-300" />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2 pt-4">
+                <button
+                  onClick={() => {
+                    setShowSubmitModal(false);
+                    setSelectedCampaign(null);
+                    setPurchaseAmount("");
+                    setNotes("");
+                    setReceiptPhoto(null);
+                    setReceiptPreview(null);
+                  }}
+                  disabled={submitting}
+                  className="flex-1 rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSubmitPurchase}
+                  disabled={submitting || !purchaseAmount || parseFloat(purchaseAmount) <= 0}
+                  className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {submitting ? "Enviando..." : "Enviar Compra"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

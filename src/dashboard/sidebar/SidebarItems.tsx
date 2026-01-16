@@ -177,11 +177,11 @@ export function SidebarItems() {
         return shouldShow;
       }
       
-      // Apenas admin pode ver Usuários
+      // Admin e merchants podem ver Usuários
       if (item.link === "/admin/users") {
-        const shouldShow = userIsAdmin;
+        const shouldShow = userIsAdmin || userIsMerchant;
         if (typeof window !== "undefined") {
-          console.log(`  ${shouldShow ? "✅" : "❌"} ${item.title} (${item.link}): ${shouldShow ? "VISÍVEL" : "OCULTO"} - isAdmin=${userIsAdmin}, role="${userRole}"`);
+          console.log(`  ${shouldShow ? "✅" : "❌"} ${item.title} (${item.link}): ${shouldShow ? "VISÍVEL" : "OCULTO"} - isAdmin=${userIsAdmin}, isMerchant=${userIsMerchant}, role="${userRole}"`);
         }
         return shouldShow;
       }
@@ -204,18 +204,9 @@ export function SidebarItems() {
         return shouldShow;
       }
 
-      // Campanhas Públicas e Minhas Campanhas apenas para merchants
-      if (item.link === "/merchant/campaigns/public" || item.link === "/merchant/campaigns/my") {
-        const shouldShow = userIsMerchant && !userIsAdmin;
-        if (typeof window !== "undefined") {
-          console.log(`  ${shouldShow ? "✅" : "❌"} ${item.title} (${item.link}): ${shouldShow ? "VISÍVEL" : "OCULTO"} - isMerchant=${userIsMerchant}, isAdmin=${userIsAdmin}, role="${userRole}"`);
-        }
-        return shouldShow;
-      }
-
-      // Admin não deve ver "Campanhas Públicas" e "Minhas Campanhas" (apenas "Campanhas")
+      // Admin, merchants e clientes podem ver "Campanhas"
       if (item.link === "/admin/campaigns" && item.title === "Campanhas") {
-        const shouldShow = userIsAdmin || userIsUser || !userIsMerchant; // Admin e clientes veem, merchant não vê
+        const shouldShow = userIsAdmin || userIsUser || userIsMerchant; // Admin, clientes e merchants veem
         if (typeof window !== "undefined") {
           console.log(`  ${shouldShow ? "✅" : "❌"} ${item.title} (${item.link}): ${shouldShow ? "VISÍVEL" : "OCULTO"} - isAdmin=${userIsAdmin}, isMerchant=${userIsMerchant}, isUser=${userIsUser}, role="${userRole}"`);
         }
@@ -253,8 +244,11 @@ export function SidebarItems() {
               return false;
             }
             // Aplicar mesma lógica de filtro aos filhos
-            if (child.link === "/admin/merchants" || child.link === "/admin/users") {
-              return userIsAdmin;
+            if (child.link === "/admin/merchants") {
+              return userIsAdmin; // Apenas admin vê merchants
+            }
+            if (child.link === "/admin/users") {
+              return userIsAdmin || userIsMerchant; // Admin e merchants veem usuários
             }
             return true;
           })

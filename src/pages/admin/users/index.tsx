@@ -599,7 +599,7 @@ function UsersPageContent() {
 
 export default function UsersPage() {
   return (
-    <ProtectedRoute requireAdmin={true} redirectTo="/">
+    <ProtectedRoute allowedRoles={["admin", "merchant"]} redirectTo="/">
       <UsersPageContent />
     </ProtectedRoute>
   );

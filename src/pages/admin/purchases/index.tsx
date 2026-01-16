@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/AuthContext";
 import { isUser, isAdmin, isMerchant } from "@/utils/roleUtils";
 import { purchaseService, Purchase, PurchaseStatus } from "@/services/purchase.service";
+import { campaignsService, Campaign } from "@/services/campaigns.service";
 import { ConfirmModal } from "@/components/modals/ConfirmModal";
 import { AlertModal } from "@/components/modals/AlertModal";
 import { API_BASE_URL } from "@/services/api";
@@ -25,10 +26,17 @@ export default function PurchasesPage() {
   const [pagination, setPagination] = useState<any>(null);
   const [metrics, setMetrics] = useState<any>(null);
   
+  // Estados para campanhas
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [campaignsLoading, setCampaignsLoading] = useState(false);
+  const [showCampaigns, setShowCampaigns] = useState(false);
+  
   // Estados para modais
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [alertModalOpen, setAlertModalOpen] = useState(false);
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
+  const [receiptImageUrl, setReceiptImageUrl] = useState<string | null>(null);
   const [purchaseToAction, setPurchaseToAction] = useState<Purchase | null>(null);
   const [alertConfig, setAlertConfig] = useState<{ title: string; message: string; type: "success" | "error" | "warning" | "info" } | null>(null);
 
@@ -40,6 +48,24 @@ export default function PurchasesPage() {
       setTimeout(() => loadPurchases(), 50);
     }
   }, [currentPage, statusFilter]);
+
+  const loadCampaigns = async () => {
+    try {
+      setCampaignsLoading(true);
+      const response = await campaignsService.getAll({ page: 1, limit: 1000 });
+      setCampaigns(response.data || []);
+    } catch (err: any) {
+      console.error("Erro ao carregar campanhas:", err);
+    } finally {
+      setCampaignsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showCampaigns && campaigns.length === 0) {
+      loadCampaigns();
+    }
+  }, [showCampaigns]);
 
   const loadPurchases = async () => {
     try {
@@ -54,12 +80,32 @@ export default function PurchasesPage() {
       }
       // Para clientes, o backend deve filtrar automaticamente por user_id
       // Não precisamos passar user_id explicitamente, o backend usa o token
+      console.log("🔍 [PURCHASES] Carregando compras com params:", params);
       const response = await purchaseService.getAll(params);
+      console.log("✅ [PURCHASES] Resposta recebida:", {
+        hasData: !!response.data,
+        dataLength: response.data?.length || 0,
+        hasPagination: !!response.pagination,
+        hasMetrics: !!response.metrics,
+        fullResponse: response
+      });
       setPurchases(response.data || []);
       setPagination(response.pagination || null);
       setMetrics(response.metrics || null);
+      
+      // Log adicional para debug
+      if (!response.data || response.data.length === 0) {
+        console.log("⚠️ [PURCHASES] Nenhuma compra encontrada na resposta");
+        console.log("⚠️ [PURCHASES] Resposta completa:", JSON.stringify(response, null, 2));
+      }
     } catch (err: any) {
-      console.error("Erro ao carregar compras:", err);
+      console.error("❌ [PURCHASES] Erro ao carregar compras:", err);
+      console.error("❌ [PURCHASES] Detalhes do erro:", {
+        message: err.message,
+        response: err.response,
+        status: err.response?.status,
+        data: err.response?.data
+      });
       const errorMessage = err.message || "Erro ao carregar compras";
       setError(errorMessage);
       
@@ -136,7 +182,23 @@ export default function PurchasesPage() {
         throw new Error("ID da compra não encontrado");
       }
 
-      await purchaseService.confirm(purchaseId);
+      // Detectar tipo de compra e chamar endpoint correto
+      const purchaseType = purchaseToAction.purchaseType || purchaseToAction.purchase_type || 'regular';
+      const purchaseIdStr = String(purchaseId);
+      
+      if (purchaseType === 'campaign' || purchaseIdStr.startsWith('campaign_')) {
+        // Extrair ID numérico do ID (pode ser "campaign_123")
+        const numericId = purchaseIdStr.replace('campaign_', '');
+        await purchaseService.validateCampaignPurchase(numericId);
+      } else if (purchaseType === 'draw' || purchaseIdStr.startsWith('draw_')) {
+        // Extrair ID numérico do ID (pode ser "draw_123")
+        const numericId = purchaseIdStr.replace('draw_', '');
+        await purchaseService.validateDrawPurchase(numericId);
+      } else {
+        // Compra regular
+        await purchaseService.confirm(Number(purchaseId));
+      }
+      
       await loadPurchases();
       
       // Mostrar modal de sucesso
@@ -177,7 +239,23 @@ export default function PurchasesPage() {
         throw new Error("ID da compra não encontrado");
       }
 
-      await purchaseService.reject(purchaseId);
+      // Detectar tipo de compra e chamar endpoint correto
+      const purchaseType = purchaseToAction.purchaseType || purchaseToAction.purchase_type || 'regular';
+      const purchaseIdStr = String(purchaseId);
+      
+      if (purchaseType === 'campaign' || purchaseIdStr.startsWith('campaign_')) {
+        // Extrair ID numérico do ID (pode ser "campaign_123")
+        const numericId = purchaseIdStr.replace('campaign_', '');
+        await purchaseService.rejectCampaignPurchase(numericId);
+      } else if (purchaseType === 'draw' || purchaseIdStr.startsWith('draw_')) {
+        // Extrair ID numérico do ID (pode ser "draw_123")
+        const numericId = purchaseIdStr.replace('draw_', '');
+        await purchaseService.rejectDrawPurchase(numericId);
+      } else {
+        // Compra regular
+        await purchaseService.reject(Number(purchaseId));
+      }
+      
       await loadPurchases();
       
       // Mostrar modal de sucesso
@@ -205,6 +283,19 @@ export default function PurchasesPage() {
     setConfirmModalOpen(false);
     setRejectModalOpen(false);
     setPurchaseToAction(null);
+  };
+
+  const handleReceiptClick = (receiptUrl: string) => {
+    const processedUrl = processReceiptUrl(receiptUrl);
+    if (processedUrl) {
+      setReceiptImageUrl(processedUrl);
+      setReceiptModalOpen(true);
+    }
+  };
+
+  const handleCloseReceiptModal = () => {
+    setReceiptModalOpen(false);
+    setReceiptImageUrl(null);
   };
 
   const handleView = (id: number) => {
@@ -265,18 +356,45 @@ export default function PurchasesPage() {
       return null;
     }
     
+    // Se já é uma URL completa, retornar como está
     if (rawImageUrl.startsWith("http://") || rawImageUrl.startsWith("https://")) {
+      console.log("🔍 [processReceiptUrl] URL completa:", rawImageUrl);
       return rawImageUrl;
     }
     
+    // Determinar o servidor base (remover /api se existir)
+    const serverBaseUrl = API_BASE_URL.replace('/api', '') || 'http://localhost:8000';
+    
+    // Se começa com /, construir URL completa
     if (rawImageUrl.startsWith("/")) {
-      if (rawImageUrl.startsWith("/api")) {
-        return `http://72.60.20.31:8000${rawImageUrl}`;
+      // Se já começa com /api/uploads, usar o servidor correto
+      if (rawImageUrl.startsWith("/api/uploads")) {
+        const fullUrl = `${serverBaseUrl}${rawImageUrl}`;
+        console.log("🔍 [processReceiptUrl] URL processada (com /api/uploads):", fullUrl);
+        return fullUrl;
       }
-      return `${API_BASE_URL}${rawImageUrl}`;
+      // Se começa com /uploads, adicionar /api
+      if (rawImageUrl.startsWith("/uploads")) {
+        const fullUrl = `${serverBaseUrl}/api${rawImageUrl}`;
+        console.log("🔍 [processReceiptUrl] URL processada (com /uploads):", fullUrl);
+        return fullUrl;
+      }
+      // Outras rotas /api
+      if (rawImageUrl.startsWith("/api")) {
+        const fullUrl = `${serverBaseUrl}${rawImageUrl}`;
+        console.log("🔍 [processReceiptUrl] URL processada (com /api):", fullUrl);
+        return fullUrl;
+      }
+      // Outras rotas que começam com /
+      const fullUrl = `${serverBaseUrl}/api${rawImageUrl}`;
+      console.log("🔍 [processReceiptUrl] URL processada (com /):", fullUrl);
+      return fullUrl;
     }
     
-    return `${API_BASE_URL}/${rawImageUrl}`;
+    // Se não começa com /, adicionar /api/uploads/
+    const fullUrl = `${serverBaseUrl}/api/uploads/${rawImageUrl}`;
+    console.log("🔍 [processReceiptUrl] URL processada (sem /):", fullUrl);
+    return fullUrl;
   };
 
   return (
@@ -291,7 +409,20 @@ export default function PurchasesPage() {
         </div>
       )}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Compras</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-900">Compras</h1>
+          <button
+            onClick={() => {
+              setShowCampaigns(!showCampaigns);
+              if (!showCampaigns && campaigns.length === 0) {
+                loadCampaigns();
+              }
+            }}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 transition-colors"
+          >
+            {showCampaigns ? "Ocultar Campanhas" : "Ver Todas as Campanhas"}
+          </button>
+        </div>
         {metrics && (
           <div className="mt-4 space-y-4">
             {/* Cards de Status - Primeira Linha */}
@@ -450,6 +581,110 @@ export default function PurchasesPage() {
         )}
       </div>
 
+      {/* Seção de Campanhas */}
+      {showCampaigns && (
+        <div className="mb-6 rounded-lg bg-white p-6 shadow">
+          <h2 className="mb-4 text-xl font-bold text-gray-900">Todas as Campanhas</h2>
+          
+          {campaignsLoading ? (
+            <div className="flex h-32 items-center justify-center">
+              <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
+            </div>
+          ) : campaigns.length === 0 ? (
+            <p className="text-center text-gray-500">Nenhuma campanha encontrada</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Nome
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Tipo
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Estabelecimento
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Data Início
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Data Fim
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Ações
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 bg-white">
+                  {campaigns.map((campaign) => {
+                    const campaignId = campaign.id || campaign.campaign_id || "";
+                    const campaignName = campaign.name || campaign.campaign_name || campaign.benefit_description || campaign.participation_criteria || "Sem nome";
+                    const campaignType = campaign.type || "";
+                    const establishmentName = campaign.establishment?.name || campaign.establishmentName || "-";
+                    const status = campaign.active ? "Ativa" : "Inativa";
+                    const validFrom = campaign.validFrom || campaign.valid_from || campaign.start_date || campaign.draw_start_date || "-";
+                    const validUntil = campaign.validUntil || campaign.valid_until || campaign.end_date || campaign.draw_end_date || "-";
+
+                    return (
+                      <tr key={campaignId} className="hover:bg-gray-50">
+                        <td className="whitespace-normal px-6 py-4 text-sm text-gray-900 max-w-xs">
+                          <div className="truncate" title={campaignName}>
+                            {campaignName}
+                          </div>
+                        </td>
+                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                          <span className="inline-flex rounded-full bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-800">
+                            {campaignType === "RewardType_Auto" ? "Oferta Automática" :
+                             campaignType === "RewardType_Draw" ? "Sorteio" :
+                             campaignType === "RewardType_Booking" ? "Reserva" :
+                             campaignType}
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                          {establishmentName}
+                        </td>
+                        <td className="whitespace-nowrap px-6 py-4">
+                          <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                            status === "Ativa" 
+                              ? "bg-green-100 text-green-800" 
+                              : "bg-gray-100 text-gray-800"
+                          }`}>
+                            {status}
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                          {validFrom !== "-" ? formatDate(validFrom) : "-"}
+                        </td>
+                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                          {validUntil !== "-" ? formatDate(validUntil) : "-"}
+                        </td>
+                        <td className="whitespace-nowrap px-6 py-4 text-sm font-medium">
+                          <button
+                            onClick={() => router.push(`/admin/campaigns/${campaignId}`)}
+                            className="text-blue-600 hover:text-blue-900"
+                            title="Ver detalhes"
+                          >
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="mb-6 flex flex-col gap-4 sm:flex-row">
         <div className="relative flex-1">
           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -500,9 +735,34 @@ export default function PurchasesPage() {
         </div>
       ) : paginatedPurchases.length === 0 ? (
         <div className="rounded-lg bg-white py-12 text-center shadow">
-          <p className="text-lg text-gray-500">
-            {searchTerm || statusFilter || receiptFilter !== "all" ? "Nenhuma compra encontrada com esses filtros" : "Nenhuma compra encontrada"}
-          </p>
+          <div className="mx-auto max-w-md">
+            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <h3 className="mt-4 text-lg font-medium text-gray-900">
+              {searchTerm || statusFilter || receiptFilter !== "all" 
+                ? "Nenhuma compra encontrada com esses filtros" 
+                : "Nenhuma compra encontrada"}
+            </h3>
+            <p className="mt-2 text-sm text-gray-500">
+              {searchTerm || statusFilter || receiptFilter !== "all" 
+                ? "Tente ajustar os filtros de busca para encontrar compras."
+                : "Ainda não há compras registradas no sistema. As compras aparecerão aqui quando forem criadas."}
+            </p>
+            {!searchTerm && !statusFilter && receiptFilter === "all" && (
+              <div className="mt-6">
+                <button
+                  onClick={() => loadPurchases()}
+                  className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Atualizar
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         <>
@@ -520,6 +780,9 @@ export default function PurchasesPage() {
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                       Estabelecimento
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Campanha
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                       Valor
@@ -555,6 +818,8 @@ export default function PurchasesPage() {
                     const purchaseDate = purchase.purchaseDate || purchase.purchase_date || purchase.createdAt || purchase.created_at;
                     const receiptPhoto = purchase.receiptPhoto || purchase.receipt_photo;
                     const hasReceipt = !!receiptPhoto;
+                    const purchaseType = purchase.purchaseType || purchase.purchase_type || 'regular';
+                    const campaignName = purchase.campaignName || purchase.campaign_name || null;
 
                     return (
                       <tr key={purchaseId} className="hover:bg-gray-50">
@@ -566,6 +831,20 @@ export default function PurchasesPage() {
                         </td>
                         <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                           {establishmentName}
+                        </td>
+                        <td className="whitespace-normal px-6 py-4 text-sm text-gray-500 max-w-xs">
+                          {campaignName ? (
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex rounded-full bg-purple-100 px-2 py-1 text-xs font-semibold text-purple-800">
+                                {purchaseType === 'campaign' ? 'Automática' : purchaseType === 'draw' ? 'Sorteio' : 'Regular'}
+                              </span>
+                              <span className="truncate" title={campaignName}>
+                                {campaignName}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
                         </td>
                         <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
                           {formatCurrency(purchaseAmount)}
@@ -580,11 +859,15 @@ export default function PurchasesPage() {
                         </td>
                         <td className="whitespace-nowrap px-6 py-4 text-center">
                           {hasReceipt ? (
-                            <span className="inline-flex items-center justify-center" title="Recibo disponível">
-                              <svg className="h-5 w-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <button
+                              onClick={() => handleReceiptClick(receiptPhoto!)}
+                              className="inline-flex items-center justify-center text-green-600 hover:text-green-800 transition-colors cursor-pointer"
+                              title="Clique para ver o comprovativo"
+                            >
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                               </svg>
-                            </span>
+                            </button>
                           ) : (
                             <span className="inline-flex items-center justify-center text-gray-400" title="Sem recibo">
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -751,6 +1034,66 @@ export default function PurchasesPage() {
           type="danger"
           isLoading={rejectLoading}
         />
+      )}
+
+      {/* Modal de Comprovativo */}
+      {receiptModalOpen && receiptImageUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75"
+          onClick={handleCloseReceiptModal}
+        >
+          <div
+            className="relative max-w-4xl max-h-[90vh] bg-white rounded-lg shadow-xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-lg font-semibold text-gray-900">Comprovativo</h3>
+              <button
+                onClick={handleCloseReceiptModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+                title="Fechar"
+              >
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4 overflow-auto max-h-[calc(90vh-80px)]">
+              <img
+                src={receiptImageUrl}
+                alt="Comprovativo"
+                className="max-w-full h-auto mx-auto rounded-lg"
+                onError={(e) => {
+                  console.error("Erro ao carregar imagem:", receiptImageUrl);
+                  const img = e.target as HTMLImageElement;
+                  img.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23f3f4f6' width='400' height='300'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%239ca3af' font-family='sans-serif' font-size='16'%3EErro ao carregar imagem%3C/text%3E%3C/svg%3E";
+                  img.onerror = null; // Prevenir loop infinito
+                }}
+                onLoad={() => {
+                  console.log("✅ Imagem carregada com sucesso:", receiptImageUrl);
+                }}
+              />
+              <div className="mt-2 text-center text-sm text-gray-500">
+                <a
+                  href={receiptImageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-800 underline"
+                >
+                  Abrir em nova aba
+                </a>
+              </div>
+            </div>
+            <div className="p-4 border-t bg-gray-50">
+              <button
+                onClick={handleCloseReceiptModal}
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal de Alerta */}

@@ -1254,10 +1254,46 @@ export const campaignsService = {
   },
 
   /**
+   * Marcar reserva como usada
+   * PUT /api/campaigns/:campaignId/participations/:participationId/mark-used
+   */
+  async markReservationAsUsed(campaignId: string | number, participationId: string | number): Promise<any> {
+    try {
+      const response = await api.put(`/campaigns/${campaignId}/participations/${participationId}/mark-used`);
+      return response.data?.data || response.data;
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao marcar reserva como usada";
+      
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 400) {
+        message = data?.message || data?.error || "Esta reserva já foi marcada como usada";
+      } else if (_status === 403) {
+        message = data?.message || data?.error || "Acesso negado";
+      } else if (_status === 404) {
+        message = data?.message || data?.error || "Reserva não encontrada";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      const error = new Error(message);
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
+    }
+  },
+
+  /**
    * Buscar participações de uma campanha (códigos de reserva)
    * GET /api/campaigns/:id/participations
    */
-  async getCampaignParticipations(campaignId: number | string): Promise<{
+  async getCampaignParticipations(campaignId: number | string, params?: { status?: 'pending' | 'used' | 'expired' | 'all'; search?: string }): Promise<{
     participationId: number;
     reservationCode: string;
     status: string;
@@ -1274,7 +1310,11 @@ export const campaignsService = {
     expiresAt: string | null;
   }[]> {
     try {
-      const response = await api.get(`/campaigns/${campaignId}/participations`);
+      const queryParams: any = {};
+      if (params?.status !== undefined) queryParams.status = params.status;
+      if (params?.search !== undefined) queryParams.search = params.search;
+      
+      const response = await api.get(`/campaigns/${campaignId}/participations`, { params: queryParams });
       
       return response.data?.data || [];
     } catch (err: any) {
@@ -1289,6 +1329,633 @@ export const campaignsService = {
         message = data?.message || data?.error || "Acesso negado. Apenas administradores e merchants podem ver participações.";
       } else if (_status === 404) {
         message = data?.message || data?.error || "Campanha não encontrada";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      const error = new Error(message);
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
+    }
+  },
+
+  async getPendingPurchases(campaignId: string | number, params?: { page?: number; limit?: number; status?: 'pending' | 'validated' | 'rejected' | 'all' }): Promise<any> {
+    try {
+      const queryParams: any = {};
+      if (params?.page !== undefined) queryParams.page = params.page;
+      if (params?.limit !== undefined) queryParams.limit = params.limit;
+      if (params?.status !== undefined) queryParams.status = params.status;
+
+      const response = await api.get(`/auto-campaigns/${campaignId}/purchases`, { params: queryParams });
+      // Retornar tanto os dados quanto as estatísticas
+      return {
+        data: response.data?.data || response.data,
+        stats: response.data?.stats || null,
+        pagination: response.data?.pagination || null
+      };
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao buscar pagamentos pendentes";
+      
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 401) {
+        message = "Não autorizado. Por favor, faça login novamente.";
+      } else if (_status === 403) {
+        message = "Você não tem permissão para ver pagamentos pendentes desta campanha.";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      const error = new Error(message);
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
+    }
+  },
+
+  async validatePurchase(purchaseId: string | number): Promise<any> {
+    try {
+      const response = await api.post(`/auto-campaigns/purchases/${purchaseId}/validate`);
+      return response.data?.data || response.data;
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao validar pagamento";
+      
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 401) {
+        message = "Não autorizado. Por favor, faça login novamente.";
+      } else if (_status === 403) {
+        message = "Você não tem permissão para validar este pagamento.";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      const error = new Error(message);
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
+    }
+  },
+
+  async rejectPurchase(purchaseId: string | number, rejectionReason?: string): Promise<any> {
+    try {
+      const response = await api.post(`/auto-campaigns/purchases/${purchaseId}/reject`, {
+        rejection_reason: rejectionReason || undefined
+      });
+      return response.data?.data || response.data;
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao rejeitar pagamento";
+      
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 401) {
+        message = "Não autorizado. Por favor, faça login novamente.";
+      } else if (_status === 403) {
+        message = "Você não tem permissão para rejeitar este pagamento.";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      const error = new Error(message);
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
+    }
+  },
+};
+
+// Interface para campanha automática simplificada
+export interface AutoCampaign {
+  id?: string | number;
+  campaign_id?: string | number;
+  establishment_id?: number | string;
+  establishment_name?: string;
+  benefit_description: string;
+  valid_from: string;
+  valid_until: string;
+  min_purchase_amount?: number;
+  is_active?: boolean;
+}
+
+export interface CreateAutoCampaignDTO {
+  establishment_id: number | string;
+  benefit_description: string;
+  valid_from: string;
+  valid_until: string;
+  min_purchase_amount?: number;
+}
+
+export interface UpdateAutoCampaignDTO {
+  benefit_description?: string;
+  valid_from?: string;
+  valid_until?: string;
+  min_purchase_amount?: number;
+}
+
+export interface AutoCampaignsResponse {
+  success: boolean;
+  data: AutoCampaign[];
+  pagination?: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
+// Serviço específico para campanhas automáticas
+export const autoCampaignsService = {
+  /**
+   * Criar campanha automática
+   * POST /api/auto-campaigns
+   */
+  async create(data: CreateAutoCampaignDTO): Promise<AutoCampaign> {
+    try {
+      const response = await api.post("/auto-campaigns", data);
+      return response.data?.data || response.data;
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao criar campanha automática";
+      
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 400) {
+        message = data?.message || data?.error || "Dados inválidos para criar campanha automática";
+      } else if (_status === 403) {
+        message = data?.message || data?.error || "Acesso negado. Você não tem permissão para criar campanhas automáticas.";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      const error = new Error(message);
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Listar campanhas automáticas
+   * GET /api/auto-campaigns
+   */
+  async getAll(params?: { page?: number; limit?: number; establishment_id?: number }): Promise<AutoCampaignsResponse> {
+    try {
+      const queryParams: any = {};
+      if (params?.page !== undefined) queryParams.page = params.page;
+      if (params?.limit !== undefined) queryParams.limit = params.limit;
+      if (params?.establishment_id !== undefined) queryParams.establishment_id = params.establishment_id;
+
+      const response = await api.get("/auto-campaigns", { params: queryParams });
+
+      if (response.data?.success !== undefined) {
+        return {
+          success: response.data.success,
+          data: response.data.data || [],
+          pagination: response.data.pagination,
+        };
+      } else {
+        return {
+          success: true,
+          data: response.data?.data || response.data || [],
+          pagination: response.data?.pagination,
+        };
+      }
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao buscar campanhas automáticas";
+      
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 401) {
+        message = "Não autorizado. Por favor, faça login novamente.";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      const error = new Error(message);
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Buscar campanha automática por ID
+   * GET /api/auto-campaigns/:id
+   */
+  async getById(id: number | string): Promise<AutoCampaign> {
+    try {
+      const response = await api.get(`/auto-campaigns/${id}`);
+      return response.data?.data || response.data;
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao buscar campanha automática";
+      
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 404) {
+        message = "Campanha automática não encontrada";
+      } else if (_status === 401) {
+        message = "Não autorizado. Por favor, faça login novamente.";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      const error = new Error(message);
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Atualizar campanha automática
+   * PUT /api/auto-campaigns/:id
+   */
+  async update(id: number | string, data: UpdateAutoCampaignDTO): Promise<AutoCampaign> {
+    try {
+      const response = await api.put(`/auto-campaigns/${id}`, data);
+      return response.data?.data || response.data;
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao atualizar campanha automática";
+      
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 400) {
+        message = data?.message || data?.error || "Dados inválidos para atualizar campanha automática";
+      } else if (_status === 404) {
+        message = "Campanha automática não encontrada";
+      } else if (_status === 403) {
+        message = data?.message || data?.error || "Acesso negado. Você não tem permissão para atualizar esta campanha automática.";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      const error = new Error(message);
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Deletar campanha automática
+   * DELETE /api/auto-campaigns/:id
+   */
+  async delete(id: number | string): Promise<void> {
+    try {
+      await api.delete(`/auto-campaigns/${id}`);
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao deletar campanha automática";
+      
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 404) {
+        message = "Campanha automática não encontrada";
+      } else if (_status === 403) {
+        message = "Acesso negado. Apenas administradores podem deletar campanhas automáticas.";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      const error = new Error(message);
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
+    }
+  },
+
+  async getPendingPurchases(campaignId: string | number, params?: { page?: number; limit?: number; status?: 'pending' | 'validated' | 'rejected' | 'all' }): Promise<any> {
+    try {
+      const queryParams: any = {};
+      if (params?.page !== undefined) queryParams.page = params.page;
+      if (params?.limit !== undefined) queryParams.limit = params.limit;
+      if (params?.status !== undefined) queryParams.status = params.status;
+
+      const response = await api.get(`/auto-campaigns/${campaignId}/purchases`, { params: queryParams });
+      // Retornar tanto os dados quanto as estatísticas
+      return {
+        data: response.data?.data || response.data,
+        stats: response.data?.stats || null,
+        pagination: response.data?.pagination || null
+      };
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao buscar pagamentos pendentes";
+      
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 401) {
+        message = "Não autorizado. Por favor, faça login novamente.";
+      } else if (_status === 403) {
+        message = "Você não tem permissão para ver pagamentos pendentes desta campanha.";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      const error = new Error(message);
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
+    }
+  },
+
+  async validatePurchase(purchaseId: string | number): Promise<any> {
+    try {
+      const response = await api.post(`/auto-campaigns/purchases/${purchaseId}/validate`);
+      return response.data?.data || response.data;
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao validar pagamento";
+      
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 401) {
+        message = "Não autorizado. Por favor, faça login novamente.";
+      } else if (_status === 403) {
+        message = "Você não tem permissão para validar este pagamento.";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      const error = new Error(message);
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
+    }
+  },
+
+  async rejectPurchase(purchaseId: string | number, rejectionReason?: string): Promise<any> {
+    try {
+      const response = await api.post(`/auto-campaigns/purchases/${purchaseId}/reject`, {
+        rejection_reason: rejectionReason || undefined
+      });
+      return response.data?.data || response.data;
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao rejeitar pagamento";
+      
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 401) {
+        message = "Não autorizado. Por favor, faça login novamente.";
+      } else if (_status === 403) {
+        message = "Você não tem permissão para rejeitar este pagamento.";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      const error = new Error(message);
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
+    }
+  },
+};
+
+// Serviço para compras de campanhas automáticas
+export const campaignPurchasesService = {
+  /**
+   * Submeter compra para validação em campanha automática
+   * POST /api/auto-campaigns/:campaignId/purchases
+   */
+  async submitPurchase(campaignId: string | number, data: { purchase_amount: number; notes?: string; receipt_photo?: File }): Promise<any> {
+    try {
+      const formData = new FormData();
+      formData.append('purchase_amount', data.purchase_amount.toString());
+      if (data.notes) {
+        formData.append('notes', data.notes);
+      }
+      if (data.receipt_photo) {
+        formData.append('receipt_photo', data.receipt_photo);
+      }
+
+      const response = await api.post(`/auto-campaigns/${campaignId}/purchases`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data?.data || response.data;
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao submeter compra para campanha";
+      
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 400) {
+        message = data?.message || data?.error || "Dados inválidos para submeter compra";
+      } else if (_status === 403) {
+        message = data?.message || data?.error || "Apenas clientes podem submeter compras para campanhas";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      const error = new Error(message);
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Listar minhas compras de campanha automática
+   * GET /api/auto-campaigns/:campaignId/my-purchases
+   */
+  async getMyPurchases(campaignId?: string | number, params?: { page?: number; limit?: number; status?: string }): Promise<any> {
+    try {
+      const queryParams: any = {};
+      if (params?.page !== undefined) queryParams.page = params.page;
+      if (params?.limit !== undefined) queryParams.limit = params.limit;
+      if (params?.status) queryParams.status = params.status;
+
+      const endpoint = campaignId 
+        ? `/auto-campaigns/${campaignId}/my-purchases`
+        : '/auto-campaigns/my-purchases';
+      
+      const response = await api.get(endpoint, { params: queryParams });
+      // O backend retorna { success: true, data: [...], pagination: {...} }
+      return response.data || { data: [], pagination: {} };
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao buscar minhas compras de campanha";
+      
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 401) {
+        message = "Não autorizado. Por favor, faça login novamente.";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      const error = new Error(message);
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
+    }
+  },
+
+  async getPendingPurchases(campaignId: string | number, params?: { page?: number; limit?: number; status?: 'pending' | 'validated' | 'rejected' | 'all' }): Promise<any> {
+    try {
+      const queryParams: any = {};
+      if (params?.page !== undefined) queryParams.page = params.page;
+      if (params?.limit !== undefined) queryParams.limit = params.limit;
+      if (params?.status !== undefined) queryParams.status = params.status;
+
+      const response = await api.get(`/auto-campaigns/${campaignId}/purchases`, { params: queryParams });
+      // Retornar tanto os dados quanto as estatísticas
+      return {
+        data: response.data?.data || response.data,
+        stats: response.data?.stats || null,
+        pagination: response.data?.pagination || null
+      };
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao buscar pagamentos pendentes";
+      
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 401) {
+        message = "Não autorizado. Por favor, faça login novamente.";
+      } else if (_status === 403) {
+        message = "Você não tem permissão para ver pagamentos pendentes desta campanha.";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      const error = new Error(message);
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
+    }
+  },
+
+  async validatePurchase(purchaseId: string | number): Promise<any> {
+    try {
+      const response = await api.post(`/auto-campaigns/purchases/${purchaseId}/validate`);
+      return response.data?.data || response.data;
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao validar pagamento";
+      
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 401) {
+        message = "Não autorizado. Por favor, faça login novamente.";
+      } else if (_status === 403) {
+        message = "Você não tem permissão para validar este pagamento.";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      const error = new Error(message);
+      if (isNetworkError) {
+        (error as any).isNetworkError = true;
+      }
+      throw error;
+    }
+  },
+
+  async rejectPurchase(purchaseId: string | number, rejectionReason?: string): Promise<any> {
+    try {
+      const response = await api.post(`/auto-campaigns/purchases/${purchaseId}/reject`, {
+        rejection_reason: rejectionReason || undefined
+      });
+      return response.data?.data || response.data;
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao rejeitar pagamento";
+      
+      const isNetworkError = err.isNetworkError || err.message === "Network Error" || err.code === "ERR_NETWORK";
+      if (isNetworkError) {
+        message = "Servidor não disponível. Verifique se o backend está rodando em http://localhost:8000";
+      } else if (_status === 401) {
+        message = "Não autorizado. Por favor, faça login novamente.";
+      } else if (_status === 403) {
+        message = "Você não tem permissão para rejeitar este pagamento.";
       } else if (data?.message || data?.error) {
         message = data.message || data.error || message;
       } else if (err?.message) {

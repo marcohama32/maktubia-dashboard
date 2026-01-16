@@ -49,16 +49,6 @@ export const sidebarItems: SidebarItem[] = [
     link: "/admin/campaigns",
   },
   {
-    title: "Campanhas Públicas",
-    icon: "PurchaseIcon",
-    link: "/merchant/campaigns/public",
-  },
-  {
-    title: "Minhas Campanhas",
-    icon: "PurchaseIcon",
-    link: "/merchant/campaigns/my",
-  },
-  {
     title: "Pontos",
     icon: "PointsIcon",
     link: "#",

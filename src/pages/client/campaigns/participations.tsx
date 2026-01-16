@@ -385,7 +385,7 @@ function ParticipationsPageContent() {
 
 export default function ParticipationsPage() {
   return (
-    <ProtectedRoute requireClient={true} redirectTo="/merchant/campaigns/public">
+    <ProtectedRoute requireClient={true} redirectTo="/admin/campaigns">
       <ParticipationsPageContent />
     </ProtectedRoute>
   );

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "./AuthContext";
 import { notificationService, Notification as NotificationServiceType } from "@/services/notification.service";
+import { browserNotificationService } from "@/services/browserNotification.service";
 
 // Import dinâmico do websocket service para evitar problemas SSR
 let websocketServiceModule: any = null;
@@ -90,18 +91,85 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   // Adicionar notificação recebida via WebSocket
   const addNotification = useCallback((notificationData: NotificationServiceType) => {
+    console.log('🔔 [NotificationContext] addNotification() CHAMADO!');
+    console.log('🔔 [NotificationContext] notificationData recebido:', notificationData);
+    
     const notification = convertNotification(notificationData);
+    console.log('🔔 [NotificationContext] notification convertido:', notification);
     
     setNotifications(prev => {
       // Verificar se já existe (evitar duplicatas)
       const exists = prev.some(n => n.id === notification.id);
       if (exists) {
+        console.log('⚠️ [NotificationContext] Notificação já existe, ignorando duplicata');
         return prev;
       }
       
+      console.log('✅ [NotificationContext] Adicionando notificação ao estado');
       // Adicionar no início da lista
       return [notification, ...prev];
     });
+
+    // Mostrar notificação do navegador
+    console.log('🔔 [NotificationContext] Verificando se deve mostrar notificação do navegador...');
+    console.log('🔔 [NotificationContext] typeof window:', typeof window);
+    console.log('🔔 [NotificationContext] isNotificationSupported:', browserNotificationService.isNotificationSupported());
+    if (typeof window !== 'undefined' && browserNotificationService.isNotificationSupported()) {
+      // Verificar se a página está em foco
+      const isPageVisible = !document.hidden;
+      console.log('🔍 [NotificationContext] Página está visível?', isPageVisible);
+      console.log('🔍 [NotificationContext] document.hidden:', document.hidden);
+      
+      // Mostrar notificação do navegador sempre (tanto quando está em foco quanto quando não está)
+      // Isso garante que o usuário sempre veja a notificação do Windows
+      // O toast também será mostrado quando a página está em foco
+      console.log('🚀 [NotificationContext] Mostrando notificação do navegador (sempre)');
+        // Extrair ID da campanha de diferentes formatos possíveis
+        let campaignId = null;
+        if (notification.data?.campaign?.id) {
+          campaignId = notification.data.campaign.id;
+        } else if (notification.data?.id) {
+          campaignId = notification.data.id;
+        } else if (notification.data?.campaign_id) {
+          campaignId = notification.data.campaign_id;
+        }
+
+        console.log('🚀 [NotificationContext] Chamando showNotification com:', {
+          title: notification.title,
+          body: notification.message,
+          campaignId
+        });
+        
+        browserNotificationService.showNotification({
+          title: notification.title,
+          body: notification.message,
+          icon: browserNotificationService.getNotificationIcon(notification.type),
+          badge: browserNotificationService.getNotificationIcon(notification.type),
+          tag: `notification-${notification.id}`,
+          data: {
+            notificationId: notification.id,
+            type: notification.type,
+            campaign: notification.data?.campaign || notification.data,
+            campaign_id: campaignId,
+            url: notification.data?.url,
+          },
+          requireInteraction: false, // Não requer interação para fechar automaticamente
+          silent: false, // Tocar som de notificação
+        })
+        .then(result => {
+          if (result) {
+            console.log('✅ [NotificationContext] ✅✅✅ Notificação do navegador exibida com sucesso! ✅✅✅');
+          } else {
+            console.warn('⚠️ [NotificationContext] showNotification retornou null');
+          }
+        })
+        .catch(error => {
+          console.error('❌ [NotificationContext] Erro ao mostrar notificação do navegador:', error);
+          console.error('❌ [NotificationContext] Stack:', error?.stack);
+        });
+    } else {
+      console.warn('⚠️ [NotificationContext] Não pode mostrar notificação do navegador (window ou suporte não disponível)');
+    }
   }, [convertNotification]);
 
   // Marcar notificação como lida
@@ -145,6 +213,101 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   // Calcular contagem de não lidas
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  // Solicitar permissão de notificações do navegador automaticamente quando autenticado
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (isAuthenticated && user?.id) {
+      // Solicitar permissão automaticamente assim que possível
+      const requestPermissionAutomatically = () => {
+        console.log('🔔 [NotificationContext] Verificando permissão de notificações...');
+        
+        if (browserNotificationService.isNotificationSupported()) {
+          // Atualizar permissão atual
+          const currentPermission = Notification.permission;
+          console.log('🔔 [NotificationContext] Permissão atual:', currentPermission);
+          
+          if (currentPermission === 'default') {
+            console.log('🔔 [NotificationContext] Solicitando permissão de notificações automaticamente...');
+            // Solicitar permissão automaticamente
+            browserNotificationService.requestPermission()
+              .then(permission => {
+                console.log('🔔 [NotificationContext] Resultado da permissão:', permission);
+                if (permission === 'granted') {
+                  console.log('✅ [NotificationContext] Permissão concedida! Notificações do navegador ativadas.');
+                } else if (permission === 'denied') {
+                  console.warn('⚠️ [NotificationContext] Permissão negada. O usuário precisará permitir manualmente nas configurações do navegador.');
+                }
+              })
+              .catch(error => {
+                console.error('❌ [NotificationContext] Erro ao solicitar permissão de notificações:', error);
+              });
+          } else if (currentPermission === 'granted') {
+            console.log('✅ [NotificationContext] Permissão de notificações já concedida');
+          } else if (currentPermission === 'denied') {
+            console.warn('⚠️ [NotificationContext] Permissão de notificações negada pelo usuário');
+            console.warn('💡 [NotificationContext] Para ativar, o usuário precisa permitir nas configurações do navegador');
+            console.warn('💡 [NotificationContext] Instruções: Clique no ícone de cadeado na barra de endereço → Permitir notificações');
+            console.warn('💡 [NotificationContext] Um banner será exibido para orientar o usuário');
+            // Não tentar solicitar novamente quando está denied - o banner cuidará disso
+          }
+        } else {
+          console.warn('⚠️ [NotificationContext] Notificações do navegador não são suportadas');
+        }
+      };
+
+      // Tentar solicitar imediatamente (se o usuário já interagiu com a página)
+      // E também após um pequeno delay para garantir que a página está carregada
+      console.log('🚀 [NotificationContext] Primeira tentativa de solicitar permissão...');
+      requestPermissionAutomatically();
+      
+      const timer = setTimeout(() => {
+        console.log('🚀 [NotificationContext] Segunda tentativa de solicitar permissão (após 1 segundo)...');
+        const currentPermission = Notification.permission;
+        console.log('🔍 [NotificationContext] Permissão atual na segunda tentativa:', currentPermission);
+        if (currentPermission === 'default') {
+          console.log('🔍 [NotificationContext] Permissão ainda é "default", tentando novamente...');
+          requestPermissionAutomatically();
+        } else {
+          console.log('🔍 [NotificationContext] Permissão já mudou para:', currentPermission);
+        }
+      }, 1000);
+
+      // Tentar solicitar quando o usuário interagir com a página (clique, movimento do mouse, etc.)
+      const handleUserInteraction = (eventType: string) => {
+        console.log(`🚀 [NotificationContext] Interação do usuário detectada: ${eventType}`);
+        const currentPermission = Notification.permission;
+        console.log('🔍 [NotificationContext] Permissão atual na interação:', currentPermission);
+        if (currentPermission === 'default') {
+          console.log('🔍 [NotificationContext] Permissão ainda é "default", solicitando após interação...');
+          requestPermissionAutomatically();
+          // Remover listeners após solicitar
+          document.removeEventListener('click', () => handleUserInteraction('click'));
+          document.removeEventListener('mousemove', () => handleUserInteraction('mousemove'));
+          document.removeEventListener('keydown', () => handleUserInteraction('keydown'));
+        } else {
+          console.log('🔍 [NotificationContext] Permissão já mudou para:', currentPermission);
+        }
+      };
+
+      // Adicionar listeners para interação do usuário
+      console.log('🚀 [NotificationContext] Adicionando listeners para interação do usuário...');
+      document.addEventListener('click', () => handleUserInteraction('click'), { once: true });
+      document.addEventListener('mousemove', () => handleUserInteraction('mousemove'), { once: true });
+      document.addEventListener('keydown', () => handleUserInteraction('keydown'), { once: true });
+
+      return () => {
+        console.log('🧹 [NotificationContext] Limpando listeners e timers...');
+        clearTimeout(timer);
+        document.removeEventListener('click', () => handleUserInteraction('click'));
+        document.removeEventListener('mousemove', () => handleUserInteraction('mousemove'));
+        document.removeEventListener('keydown', () => handleUserInteraction('keydown'));
+      };
+    }
+  }, [isAuthenticated, user?.id]);
 
   // Conectar WebSocket e carregar notificações quando autenticado
   useEffect(() => {
@@ -191,17 +354,20 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
         // Registrar handler para notificações em tempo real
         unsubscribeRef.current = wsService.onNotification((notificationData: any) => {
+          console.log('🔔 [NotificationContext] Recebendo notificação:', notificationData);
+          
           // Converter formato do WebSocket para o formato interno
           const notification: NotificationServiceType = {
-            id: notificationData.data?.id || Date.now() + Math.random(), // Gerar ID se não vier
+            id: notificationData.data?.id || notificationData.campaign?.id || Date.now() + Math.random(), // Gerar ID se não vier
             type: notificationData.type,
             title: notificationData.title,
             message: notificationData.message,
-            data: notificationData.data,
+            data: notificationData.data || notificationData.campaign, // Incluir dados da campanha se disponível
             read: false,
             timestamp: notificationData.timestamp || new Date().toISOString(),
           };
           
+          console.log('🔔 [NotificationContext] Adicionando notificação ao contexto:', notification);
           addNotification(notification);
         });
 

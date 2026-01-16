@@ -933,7 +933,7 @@ function NewCampaignPageContent() {
         if (campaignId) {
           router.push(`/merchant/campaigns/${campaignId}`);
         } else {
-          router.push("/merchant/campaigns/my");
+          router.push("/admin/campaigns");
         }
       }, 2000);
     } catch (err: any) {
@@ -1048,7 +1048,7 @@ function NewCampaignPageContent() {
 
       <div className="mb-6">
         <button
-          onClick={() => router.push("/merchant/campaigns/my")}
+          onClick={() => router.push("/admin/campaigns")}
           className="mb-4 text-blue-600 hover:text-blue-900 flex items-center gap-2"
         >
           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2534,7 +2534,7 @@ function NewCampaignPageContent() {
         <div className="flex justify-end gap-4">
           <button
             type="button"
-            onClick={() => router.push("/merchant/campaigns/my")}
+            onClick={() => router.push("/admin/campaigns")}
             className="rounded-lg border border-gray-300 bg-white px-6 py-2 text-gray-700 hover:bg-gray-50"
           >
             Cancelar

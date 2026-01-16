@@ -59,6 +59,12 @@ export interface Purchase {
     conversion_rate?: number;
     bonus_multiplier?: number;
   } | null;
+  campaignId?: string;
+  campaign_id?: string;
+  campaignName?: string;
+  campaign_name?: string;
+  purchaseType?: 'regular' | 'campaign' | 'draw';
+  purchase_type?: 'regular' | 'campaign' | 'draw';
 }
 
 export interface PurchaseMetrics {
@@ -145,7 +151,17 @@ export const purchaseService = {
       if (params?.min_amount !== undefined) queryParams.min_amount = params.min_amount;
       if (params?.max_amount !== undefined) queryParams.max_amount = params.max_amount;
 
+      // Adicionar timestamp para evitar cache
+      queryParams._t = Date.now();
+
+      console.log("🔍 [PURCHASE SERVICE] Buscando compras com params:", queryParams);
       const response = await api.get("/purchases", { params: queryParams });
+      console.log("✅ [PURCHASE SERVICE] Resposta recebida:", {
+        status: response.status,
+        hasData: !!response.data,
+        dataKeys: response.data ? Object.keys(response.data) : [],
+        fullData: response.data
+      });
 
       // O backend retorna: { success: true, data: [...], pagination: {...}, meta: {...}, metrics: {...} }
       if (response.data?.success && response.data?.data && Array.isArray(response.data.data)) {
@@ -346,6 +362,110 @@ export const purchaseService = {
         message = err.message;
       }
 
+      throw new Error(message);
+    }
+  },
+
+  // Validar compra de campanha automática
+  async validateCampaignPurchase(purchaseId: number | string): Promise<any> {
+    try {
+      const response = await api.post(`/auto-campaigns/purchases/${purchaseId}/validate`);
+      return response.data;
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao validar compra de campanha";
+      
+      if (_status === 500) {
+        message = data?.message || data?.error || "Erro interno do servidor ao validar compra. Por favor, tente novamente.";
+      } else if (_status === 404) {
+        message = "Compra não encontrada";
+      } else if (_status === 400) {
+        message = data?.message || data?.error || "Dados inválidos para validar compra";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      throw new Error(message);
+    }
+  },
+
+  // Rejeitar compra de campanha automática
+  async rejectCampaignPurchase(purchaseId: number | string, reason?: string): Promise<any> {
+    try {
+      const response = await api.post(`/auto-campaigns/purchases/${purchaseId}/reject`, { reason });
+      return response.data;
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao rejeitar compra de campanha";
+      
+      if (_status === 500) {
+        message = data?.message || data?.error || "Erro interno do servidor ao rejeitar compra. Por favor, tente novamente.";
+      } else if (_status === 404) {
+        message = "Compra não encontrada";
+      } else if (_status === 400) {
+        message = data?.message || data?.error || "Dados inválidos para rejeitar compra";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      throw new Error(message);
+    }
+  },
+
+  // Validar compra de campanha de sorteio
+  async validateDrawPurchase(purchaseId: number | string): Promise<any> {
+    try {
+      const response = await api.post(`/draw-campaigns/purchases/${purchaseId}/validate`);
+      return response.data;
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao validar compra de sorteio";
+      
+      if (_status === 500) {
+        message = data?.message || data?.error || "Erro interno do servidor ao validar compra. Por favor, tente novamente.";
+      } else if (_status === 404) {
+        message = "Compra não encontrada";
+      } else if (_status === 400) {
+        message = data?.message || data?.error || "Dados inválidos para validar compra";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      throw new Error(message);
+    }
+  },
+
+  // Rejeitar compra de campanha de sorteio
+  async rejectDrawPurchase(purchaseId: number | string, reason?: string): Promise<any> {
+    try {
+      const response = await api.post(`/draw-campaigns/purchases/${purchaseId}/reject`, { reason });
+      return response.data;
+    } catch (err: any) {
+      const _status = err?.response?.status;
+      const data = err?.response?.data;
+      let message = "Erro ao rejeitar compra de sorteio";
+      
+      if (_status === 500) {
+        message = data?.message || data?.error || "Erro interno do servidor ao rejeitar compra. Por favor, tente novamente.";
+      } else if (_status === 404) {
+        message = "Compra não encontrada";
+      } else if (_status === 400) {
+        message = data?.message || data?.error || "Dados inválidos para rejeitar compra";
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error || message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
       throw new Error(message);
     }
   },

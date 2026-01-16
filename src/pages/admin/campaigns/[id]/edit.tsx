@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/AuthContext";
-import { campaignsService, Campaign, UpdateCampaignDTO } from "@/services/campaigns.service";
+import { campaignsService, Campaign, UpdateCampaignDTO, autoCampaignsService, UpdateAutoCampaignDTO } from "@/services/campaigns.service";
 import { establishmentService } from "@/services/establishment.service";
 import { merchantsService } from "@/services/merchants.service";
 import { isAdmin, isMerchant } from "@/utils/roleUtils";
@@ -334,6 +334,12 @@ export default function EditCampaignPage() {
         }
       }
 
+      if (campaignType === "RewardType_Auto") {
+        formDataToSet.benefit_description = data.benefitDescription || data.benefit_description || undefined;
+        formDataToSet.required_quantity = data.requiredQuantity ?? data.required_quantity ?? undefined;
+        // reward_description já está sendo carregado acima
+      }
+
       // Carregar preview da imagem se existir
       if (data.image || data.imageUrl || data.image_url) {
         setImagePreview(data.image || data.imageUrl || data.image_url || "");
@@ -389,14 +395,29 @@ export default function EditCampaignPage() {
       return;
     }
 
-    if (!formData.campaign_name || !formData.sponsor_name || !formData.valid_from || !formData.valid_until) {
-      setAlertConfig({
-        title: "Erro!",
-        message: "Por favor, preencha todos os campos obrigatórios (nome da campanha, patrocinador, data de início e data de término).",
-        type: "error",
-      });
-      setAlertModalOpen(true);
-      return;
+    // Validação diferente para campanhas automáticas
+    if (formData.type === "RewardType_Auto") {
+      // Para campanhas automáticas, apenas benefit_description, valid_from e valid_until são obrigatórios
+      if (!formData.benefit_description || !formData.valid_from || !formData.valid_until) {
+        setAlertConfig({
+          title: "Erro!",
+          message: "Por favor, preencha todos os campos obrigatórios (definição do benefício, data de início e data de término).",
+          type: "error",
+        });
+        setAlertModalOpen(true);
+        return;
+      }
+    } else {
+      // Para outros tipos de campanha, validar campos padrão
+      if (!formData.campaign_name || !formData.sponsor_name || !formData.valid_from || !formData.valid_until) {
+        setAlertConfig({
+          title: "Erro!",
+          message: "Por favor, preencha todos os campos obrigatórios (nome da campanha, patrocinador, data de início e data de término).",
+          type: "error",
+        });
+        setAlertModalOpen(true);
+        return;
+      }
     }
 
     try {
@@ -501,7 +522,42 @@ export default function EditCampaignPage() {
         }
       }
 
-      await campaignsService.update(campaignId, updateData);
+      // Se for campanha automática, usar o serviço específico
+      if (formData.type === "RewardType_Auto") {
+        const autoCampaignUpdateData: UpdateAutoCampaignDTO = {};
+        
+        if (formData.benefit_description) {
+          autoCampaignUpdateData.benefit_description = formData.benefit_description;
+        }
+        if (formData.valid_from) {
+          autoCampaignUpdateData.valid_from = formData.valid_from;
+        }
+        if (formData.valid_until) {
+          autoCampaignUpdateData.valid_until = formData.valid_until;
+        }
+        if (formData.min_purchase_amount !== undefined && formData.min_purchase_amount !== null) {
+          autoCampaignUpdateData.min_purchase_amount = formData.min_purchase_amount;
+        }
+        
+        // Verificar se há pelo menos um campo para atualizar
+        if (Object.keys(autoCampaignUpdateData).length === 0) {
+          setAlertConfig({
+            title: "Erro!",
+            message: "Nenhum campo para atualizar.",
+            type: "error",
+          });
+          setAlertModalOpen(true);
+          setSaving(false);
+          return;
+        }
+        
+        console.log("📤 [EDIT AUTO CAMPAIGN] Atualizando campanha automática:", autoCampaignUpdateData);
+        await autoCampaignsService.update(campaignId, autoCampaignUpdateData);
+        console.log("✅ [EDIT AUTO CAMPAIGN] Campanha automática atualizada");
+      } else {
+        // Para outros tipos, usar o serviço padrão
+        await campaignsService.update(campaignId, updateData);
+      }
       
       setAlertConfig({
         title: "Sucesso!",
@@ -627,7 +683,7 @@ export default function EditCampaignPage() {
               name === "voucher_usage_limit" || name === "voucher_min_purchase" ||
               name === "voucher_discount_value" || name === "party_points_per_vote" ||
               name === "quiz_points_per_correct" || name === "quiz_max_attempts" ||
-              name === "quiz_time_limit_seconds"
+              name === "quiz_time_limit_seconds" || name === "required_quantity"
         ? (value === "" ? (name === "establishment_id" ? 0 : undefined) : Number(value))
         : name === "is_active" || name === "voucher_single_use" || name === "voucher_code_required" ||
           name === "booking_confirmation_required"
@@ -720,91 +776,98 @@ export default function EditCampaignPage() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Informações Básicas</h2>
           
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <div>
-              <label htmlFor="campaign_name" className="block text-sm font-medium text-gray-700 mb-2">
-                Nome da Campanha <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                id="campaign_name"
-                name="campaign_name"
-                value={formData.campaign_name}
-                onChange={handleChange}
-                required
-                maxLength={80}
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
-                placeholder="Ex: Promoção de Verão"
-              />
-            </div>
+            {/* Campos básicos - ocultar para campanhas automáticas */}
+            {formData.type !== "RewardType_Auto" && (
+              <>
+                <div>
+                  <label htmlFor="campaign_name" className="block text-sm font-medium text-gray-700 mb-2">
+                    Nome da Campanha <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="campaign_name"
+                    name="campaign_name"
+                    value={formData.campaign_name}
+                    onChange={handleChange}
+                    required
+                    maxLength={80}
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Ex: Promoção de Verão"
+                  />
+                </div>
 
-            <div>
-              <label htmlFor="sponsor_name" className="block text-sm font-medium text-gray-700 mb-2">
-                Nome do Patrocinador <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                id="sponsor_name"
-                name="sponsor_name"
-                value={formData.sponsor_name}
-                onChange={handleChange}
-                required
-                maxLength={80}
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
-                placeholder="Ex: Loja XYZ"
-              />
-            </div>
+                <div>
+                  <label htmlFor="sponsor_name" className="block text-sm font-medium text-gray-700 mb-2">
+                    Nome do Patrocinador <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="sponsor_name"
+                    name="sponsor_name"
+                    value={formData.sponsor_name}
+                    onChange={handleChange}
+                    required
+                    maxLength={80}
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Ex: Loja XYZ"
+                  />
+                </div>
 
-            <div className="md:col-span-2">
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
-                Descrição
-              </label>
-              <textarea
-                id="description"
-                name="description"
-                value={formData.description || ""}
-                onChange={handleChange}
-                rows={3}
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
-                placeholder="Descrição da campanha..."
-              />
-            </div>
+                <div className="md:col-span-2">
+                  <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
+                    Descrição
+                  </label>
+                  <textarea
+                    id="description"
+                    name="description"
+                    value={formData.description || ""}
+                    onChange={handleChange}
+                    rows={3}
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Descrição da campanha..."
+                  />
+                </div>
 
-            <div>
-              <label htmlFor="reward_value_mt" className="block text-sm font-medium text-gray-700 mb-2">
-                Dinheiro a gastar para os prémios (MT)
-              </label>
-              <input
-                type="number"
-                id="reward_value_mt"
-                name="reward_value_mt"
-                value={formData.reward_value_mt ?? ""}
-                onChange={handleChange}
-                min="0"
-                step="0.01"
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
-                placeholder="Ex: 5000.00"
-              />
-            </div>
+                <div>
+                  <label htmlFor="reward_value_mt" className="block text-sm font-medium text-gray-700 mb-2">
+                    Dinheiro a gastar para os prémios (MT)
+                  </label>
+                  <input
+                    type="number"
+                    id="reward_value_mt"
+                    name="reward_value_mt"
+                    value={formData.reward_value_mt ?? ""}
+                    onChange={handleChange}
+                    min="0"
+                    step="0.01"
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Ex: 5000.00"
+                  />
+                </div>
 
-            <div>
-              <label htmlFor="reward_points_cost" className="block text-sm font-medium text-gray-700 mb-2">
-                Pontos correspondentes
-              </label>
-              <input
-                type="number"
-                id="reward_points_cost"
-                name="reward_points_cost"
-                value={formData.reward_points_cost ?? ""}
-                onChange={handleChange}
-                min="0"
-                step="1"
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
-                placeholder="Ex: 10000"
-              />
-            </div>
+                <div>
+                  <label htmlFor="reward_points_cost" className="block text-sm font-medium text-gray-700 mb-2">
+                    Pontos correspondentes
+                  </label>
+                  <input
+                    type="number"
+                    id="reward_points_cost"
+                    name="reward_points_cost"
+                    value={formData.reward_points_cost ?? ""}
+                    onChange={handleChange}
+                    min="0"
+                    step="1"
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Ex: 10000"
+                  />
+                </div>
+              </>
+            )}
           </div>
         </div>
 
+        {/* Configurações de Pontos - ocultar para campanhas automáticas */}
+        {formData.type !== "RewardType_Auto" && (
         <div className="rounded-lg bg-white p-6 shadow">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Configurações de Pontos</h2>
           
@@ -845,44 +908,50 @@ export default function EditCampaignPage() {
               />
             </div>
 
-            <div>
-              <label htmlFor="min_purchase_amount" className="block text-sm font-medium text-gray-700 mb-2">
-                Valor Mínimo de Compra (MT)
-              </label>
-              <input
-                type="number"
-                id="min_purchase_amount"
-                name="min_purchase_amount"
-                value={formData.min_purchase_amount ?? ""}
-                onChange={handleChange}
-                min="0"
-                step="0.01"
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
-                placeholder="Ex: 100.00"
-              />
-            </div>
+            {/* Valor Mínimo e Máximo - apenas para tipos que não são automáticos */}
+            {formData.type !== "RewardType_Auto" && (
+              <>
+                <div>
+                  <label htmlFor="min_purchase_amount" className="block text-sm font-medium text-gray-700 mb-2">
+                    Valor Mínimo de Compra (MT)
+                  </label>
+                  <input
+                    type="number"
+                    id="min_purchase_amount"
+                    name="min_purchase_amount"
+                    value={formData.min_purchase_amount ?? ""}
+                    onChange={handleChange}
+                    min="0"
+                    step="0.01"
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Ex: 100.00"
+                  />
+                </div>
 
-            <div>
-              <label htmlFor="max_purchase_amount" className="block text-sm font-medium text-gray-700 mb-2">
-                Valor Máximo de Compra (MT)
-              </label>
-              <input
-                type="number"
-                id="max_purchase_amount"
-                name="max_purchase_amount"
-                value={formData.max_purchase_amount ?? ""}
-                onChange={handleChange}
-                min="0"
-                step="0.01"
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
-                placeholder="Ex: 10000.00"
-              />
-            </div>
+                <div>
+                  <label htmlFor="max_purchase_amount" className="block text-sm font-medium text-gray-700 mb-2">
+                    Valor Máximo de Compra (MT)
+                  </label>
+                  <input
+                    type="number"
+                    id="max_purchase_amount"
+                    name="max_purchase_amount"
+                    value={formData.max_purchase_amount ?? ""}
+                    onChange={handleChange}
+                    min="0"
+                    step="0.01"
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Ex: 10000.00"
+                  />
+                </div>
+              </>
+            )}
           </div>
         </div>
+        )}
 
         {/* Configurações baseadas no tipo de campanha */}
-        {formData.type && (
+        {formData.type && formData.type !== "RewardType_Auto" && (
           <div className="rounded-lg bg-white p-6 shadow">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               Configurações Específicas - {formData.type}
@@ -1141,6 +1210,54 @@ export default function EditCampaignPage() {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Seção específica para campanhas automáticas - apenas 3 campos */}
+        {formData.type === "RewardType_Auto" && (
+          <div className="rounded-lg bg-white p-6 shadow">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Configurações da Campanha Automática</h2>
+            
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label htmlFor="benefit_description_auto" className="block text-sm font-medium text-gray-700 mb-2">
+                  Definição do Benefício <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  id="benefit_description_auto"
+                  name="benefit_description"
+                  value={formData.benefit_description || ""}
+                  onChange={handleChange}
+                  rows={4}
+                  required
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                  placeholder="Ex: Faça compras no valor mais de 2000Mt e ganhe 1000Mt de Bônus"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Descreva o benefício da campanha automática (ex: Faça compras no valor mais de 2000Mt e ganhe 1000Mt de Bônus)
+                </p>
+              </div>
+              
+              <div>
+                <label htmlFor="min_purchase_amount_auto" className="block text-sm font-medium text-gray-700 mb-2">
+                  Valor Mínimo de Compra (MT)
+                </label>
+                <input
+                  type="number"
+                  id="min_purchase_amount_auto"
+                  name="min_purchase_amount"
+                  value={formData.min_purchase_amount ?? ""}
+                  onChange={handleChange}
+                  min="0"
+                  step="0.01"
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                  placeholder="Ex: 2000.00"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Valor mínimo de compra necessário para ganhar o benefício (opcional)
+                </p>
+              </div>
             </div>
           </div>
         )}

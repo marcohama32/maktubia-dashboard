@@ -194,7 +194,7 @@ function CampaignDetailsPageContent() {
       
       // Redirecionar após 2 segundos
       setTimeout(() => {
-        router.push("/merchant/campaigns/my");
+        router.push("/admin/campaigns");
       }, 2000);
     } catch (err: any) {
       setAlertConfig({
@@ -254,10 +254,10 @@ function CampaignDetailsPageContent() {
           {error || "Campanha não encontrada"}
         </div>
         <button
-          onClick={() => router.push("/merchant/campaigns/my")}
+          onClick={() => router.push("/admin/campaigns")}
           className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
         >
-          Voltar para Minhas Campanhas
+          Voltar para Campanhas
         </button>
       </div>
     );
@@ -270,13 +270,13 @@ function CampaignDetailsPageContent() {
       {/* Botão Voltar */}
       <div className="mb-6">
         <button
-          onClick={() => router.push("/merchant/campaigns/my")}
+          onClick={() => router.push("/admin/campaigns")}
           className="text-blue-600 hover:text-blue-900 flex items-center gap-2"
         >
           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
-          Voltar para Minhas Campanhas
+          Voltar para Campanhas
         </button>
       </div>
 

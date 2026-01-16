@@ -171,7 +171,7 @@ export const userService = {
       if (page !== undefined) params.page = page;
       if (limit !== undefined) params.limit = limit;
       
-      const response = await api.get("/users/employees", { params });
+      const response = await api.get("/users", { params });
       
       // O backend retorna: { success: true, data: [...], pagination: {...}, meta: {...} }
       if (response.data?.success && response.data?.data && Array.isArray(response.data.data)) {

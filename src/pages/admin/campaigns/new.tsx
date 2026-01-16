@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/AuthContext";
-import { campaignsService, CreateCampaignDTO } from "@/services/campaigns.service";
+import { campaignsService, CreateCampaignDTO, autoCampaignsService, CreateAutoCampaignDTO } from "@/services/campaigns.service";
+import { drawCampaignsService, CreateDrawCampaignDTO, DrawPrize } from "@/services/drawCampaigns.service";
 import { establishmentService } from "@/services/establishment.service";
 import { merchantsService } from "@/services/merchants.service";
 import { isAdmin, isMerchant } from "@/utils/roleUtils";
@@ -16,6 +17,12 @@ export default function NewCampaignPage() {
   const [error, setError] = useState<string>("");
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [alertConfig, setAlertConfig] = useState<{ title: string; message: string; type: "success" | "error" | "warning" | "info" } | null>(null);
+  
+  // Estado para prêmios de campanha de sorteio
+  const [drawPrizes, setDrawPrizes] = useState<DrawPrize[]>([
+    { position: 1, prize_name: "", prize_points: 0 }
+  ]);
+  const [numberOfPrizes, setNumberOfPrizes] = useState<number>(1);
 
   const [formData, setFormData] = useState<CreateCampaignDTO & { 
     type?: string; 
@@ -655,16 +662,63 @@ export default function NewCampaignPage() {
       return;
     }
 
-    if (!formData.campaign_name || !formData.valid_from || !formData.valid_until || 
-        formData.reward_value_mt === undefined || formData.reward_value_mt === null || 
-        formData.reward_points_cost === undefined || formData.reward_points_cost === null) {
-      setAlertConfig({
-        title: "Erro!",
-        message: "Por favor, preencha todos os campos obrigatórios (nome da campanha, dinheiro a gastar, pontos correspondentes, data de início e data de término).",
-        type: "error",
-      });
-      setAlertModalOpen(true);
-      return;
+    // Validação diferente para campanhas automáticas
+    if (formData.type === "RewardType_Auto") {
+      // Para campanhas automáticas, apenas benefit_description, valid_from e valid_until são obrigatórios
+      if (!formData.benefit_description || !formData.valid_from || !formData.valid_until) {
+        setAlertConfig({
+          title: "Erro!",
+          message: "Por favor, preencha todos os campos obrigatórios (definição do benefício, data de início e data de término).",
+          type: "error",
+        });
+        setAlertModalOpen(true);
+        return;
+      }
+    } else if (formData.type === "RewardType_Draw") {
+      // Para campanhas de sorteio, apenas participation_criteria, valid_from, valid_until e prêmios são obrigatórios
+      if (!formData.draw_participation_condition || !formData.valid_from || !formData.valid_until) {
+        setAlertConfig({
+          title: "Erro!",
+          message: "Por favor, preencha todos os campos obrigatórios (critérios de participação, data de início e data de término).",
+          type: "error",
+        });
+        setAlertModalOpen(true);
+        return;
+      }
+      // Validar prêmios
+      if (!drawPrizes || drawPrizes.length === 0) {
+        setAlertConfig({
+          title: "Erro!",
+          message: "Por favor, defina pelo menos um prêmio para o sorteio.",
+          type: "error",
+        });
+        setAlertModalOpen(true);
+        return;
+      }
+      // Validar que todos os prêmios têm nome
+      const prizesWithoutName = drawPrizes.filter(p => !p.prize_name || p.prize_name.trim() === "");
+      if (prizesWithoutName.length > 0) {
+        setAlertConfig({
+          title: "Erro!",
+          message: `Por favor, preencha o nome do prêmio para todas as posições (${prizesWithoutName.map(p => p.position).join(", ")}º lugar).`,
+          type: "error",
+        });
+        setAlertModalOpen(true);
+        return;
+      }
+    } else {
+      // Para outros tipos de campanha, validar campos padrão
+      if (!formData.campaign_name || !formData.valid_from || !formData.valid_until || 
+          formData.reward_value_mt === undefined || formData.reward_value_mt === null || 
+          formData.reward_points_cost === undefined || formData.reward_points_cost === null) {
+        setAlertConfig({
+          title: "Erro!",
+          message: "Por favor, preencha todos os campos obrigatórios (nome da campanha, dinheiro a gastar, pontos correspondentes, data de início e data de término).",
+          type: "error",
+        });
+        setAlertModalOpen(true);
+        return;
+      }
     }
 
     // Validar tipo de campanha
@@ -678,16 +732,7 @@ export default function NewCampaignPage() {
       return;
     }
 
-    // Validações específicas por tipo
-    if (formData.type === "RewardType_Draw" && !formData.min_purchase_amount) {
-      setAlertConfig({
-        title: "Erro!",
-        message: "Por favor, informe o valor mínimo de compra para campanhas de sorteio.",
-        type: "error",
-      });
-      setAlertModalOpen(true);
-      return;
-    }
+    // Validações específicas por tipo (removida validação de min_purchase_amount para sorteio, não é obrigatório)
     
     if (formData.type === "RewardType_Party") {
       if (!formData.party_voting_options || !Array.isArray(formData.party_voting_options) || formData.party_voting_options.length < 2) {
@@ -814,7 +859,7 @@ export default function NewCampaignPage() {
       return;
     }
     
-    if ((formData.type === "RewardType_Exchange" || formData.type === "RewardType_Draw" || formData.type === "RewardType_Challenge") && !formData.reward_points_cost) {
+    if ((formData.type === "RewardType_Exchange" || formData.type === "RewardType_Challenge") && !formData.reward_points_cost) {
       setAlertConfig({
         title: "Erro!",
         message: "Por favor, informe o custo em pontos da recompensa para este tipo de campanha.",
@@ -848,9 +893,15 @@ export default function NewCampaignPage() {
           const numValue = Number(estId);
           return isNaN(numValue) ? estId : numValue;
         })(),
-        campaign_name: formData.campaign_name,
-        reward_value_mt: Number(formData.reward_value_mt),
-        reward_points_cost: Number(formData.reward_points_cost),
+        
+        // Campos genéricos (apenas para tipos que não são Auto ou Draw)
+        ...(formData.type !== "RewardType_Auto" && formData.type !== "RewardType_Draw" && {
+          campaign_name: formData.campaign_name,
+          reward_value_mt: Number(formData.reward_value_mt),
+          reward_points_cost: Number(formData.reward_points_cost),
+        }),
+        
+        // Datas (sempre necessárias)
         valid_from: formData.valid_from,
         valid_until: formData.valid_until,
         // Campos opcionais
@@ -995,8 +1046,62 @@ export default function NewCampaignPage() {
 
       console.log("📤 [NEW CAMPAIGN] Enviando dados:", campaignData);
       console.log("📤 [NEW CAMPAIGN] Dados após remoção de undefined:", JSON.stringify(campaignData, null, 2));
-      const createdCampaign = await campaignsService.create(campaignData);
-      console.log("✅ [NEW CAMPAIGN] Campanha criada:", createdCampaign);
+      
+      let createdCampaign: any;
+      
+      // Se for campanha automática, usar o serviço específico
+      if (formData.type === "RewardType_Auto") {
+        const autoCampaignData: CreateAutoCampaignDTO = {
+          establishment_id: campaignData.establishment_id,
+          benefit_description: formData.benefit_description || "",
+          valid_from: formData.valid_from,
+          valid_until: formData.valid_until,
+          min_purchase_amount: formData.min_purchase_amount || undefined,
+        };
+        console.log("📤 [NEW AUTO CAMPAIGN] Enviando dados para campanha automática:", autoCampaignData);
+        createdCampaign = await autoCampaignsService.create(autoCampaignData);
+        console.log("✅ [NEW AUTO CAMPAIGN] Campanha automática criada:", createdCampaign);
+      } else if (formData.type === "RewardType_Draw") {
+        // Se for campanha de sorteio, usar o serviço específico
+        // A validação já garantiu que todos os prêmios têm nome, então podemos mapear diretamente
+        // Mas vamos garantir que apenas prêmios válidos sejam enviados
+        const validPrizes = drawPrizes
+          .filter(p => p && p.position > 0 && p.prize_name && p.prize_name.trim() !== "")
+          .map(p => ({
+            position: Number(p.position),
+            prize_name: String(p.prize_name).trim(),
+            prize_points: 0 // Pontos não são necessários, o sistema apenas registra os vencedores
+          }));
+        
+        console.log("🔍 [NEW DRAW CAMPAIGN] Prêmios originais:", JSON.stringify(drawPrizes, null, 2));
+        console.log("🔍 [NEW DRAW CAMPAIGN] Prêmios válidos após filtro:", JSON.stringify(validPrizes, null, 2));
+        console.log("🔍 [NEW DRAW CAMPAIGN] Número de prêmios válidos:", validPrizes.length);
+        
+        if (validPrizes.length === 0) {
+          setAlertConfig({
+            title: "Erro!",
+            message: "Nenhum prêmio válido encontrado. Por favor, preencha pelo menos um prêmio.",
+            type: "error",
+          });
+          setAlertModalOpen(true);
+          return;
+        }
+        
+        const drawCampaignData: CreateDrawCampaignDTO = {
+          establishment_id: campaignData.establishment_id,
+          participation_criteria: formData.draw_participation_condition || "",
+          draw_start_date: formData.valid_from,
+          draw_end_date: formData.valid_until,
+          prizes: validPrizes,
+        };
+        console.log("📤 [NEW DRAW CAMPAIGN] Enviando dados para campanha de sorteio:", JSON.stringify(drawCampaignData, null, 2));
+        createdCampaign = await drawCampaignsService.create(drawCampaignData);
+        console.log("✅ [NEW DRAW CAMPAIGN] Campanha de sorteio criada:", createdCampaign);
+      } else {
+        // Para outros tipos, usar o serviço padrão
+        createdCampaign = await campaignsService.create(campaignData);
+        console.log("✅ [NEW CAMPAIGN] Campanha criada:", createdCampaign);
+      }
       
       setAlertConfig({
         title: "Sucesso!",
@@ -1318,99 +1423,239 @@ export default function NewCampaignPage() {
               )}
             </div>
 
-            <div>
-              <label htmlFor="campaign_name" className="block text-sm font-medium text-gray-700 mb-2">
-                Nome da Campanha <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                id="campaign_name"
-                name="campaign_name"
-                value={formData.campaign_name}
-                onChange={handleChange}
-                required
-                maxLength={80}
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
-                placeholder="Ex: Promoção de Verão"
-              />
-            </div>
+            {/* Campos básicos - ocultar para campanhas automáticas */}
+            {formData.type !== "RewardType_Auto" && formData.type !== "RewardType_Draw" && (
+              <>
+                <div>
+                  <label htmlFor="campaign_name" className="block text-sm font-medium text-gray-700 mb-2">
+                    Nome da Campanha <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="campaign_name"
+                    name="campaign_name"
+                    value={formData.campaign_name}
+                    onChange={handleChange}
+                    required
+                    maxLength={80}
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Ex: Promoção de Verão"
+                  />
+                </div>
 
-            <div>
-              <label htmlFor="reward_value_mt" className="block text-sm font-medium text-gray-700 mb-2">
-                Dinheiro a gastar para os prémios (MT) <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                id="reward_value_mt"
-                name="reward_value_mt"
-                value={formData.reward_value_mt ?? ""}
-                onChange={handleChange}
-                required
-                min="0"
-                step="0.01"
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
-                placeholder="Ex: 5000.00"
-              />
-              <p className="mt-1 text-xs text-gray-500">Valor total em Meticais a ser gasto com prémios</p>
-            </div>
+                <div>
+                  <label htmlFor="reward_value_mt" className="block text-sm font-medium text-gray-700 mb-2">
+                    Dinheiro a gastar para os prémios (MT) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    id="reward_value_mt"
+                    name="reward_value_mt"
+                    value={formData.reward_value_mt ?? ""}
+                    onChange={handleChange}
+                    required
+                    min="0"
+                    step="0.01"
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Ex: 5000.00"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Valor total em Meticais a ser gasto com prémios</p>
+                </div>
 
-            <div>
-              <label htmlFor="reward_points_cost" className="block text-sm font-medium text-gray-700 mb-2">
-                Pontos correspondentes <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                id="reward_points_cost"
-                name="reward_points_cost"
-                value={formData.reward_points_cost ?? ""}
-                onChange={handleChange}
-                required
-                min="0"
-                step="1"
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
-                placeholder="Ex: 10000"
-              />
-              <p className="mt-1 text-xs text-gray-500">Total de pontos que correspondem ao valor gasto</p>
-            </div>
+                <div>
+                  <label htmlFor="reward_points_cost" className="block text-sm font-medium text-gray-700 mb-2">
+                    Pontos correspondentes <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    id="reward_points_cost"
+                    name="reward_points_cost"
+                    value={formData.reward_points_cost ?? ""}
+                    onChange={handleChange}
+                    required
+                    min="0"
+                    step="1"
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Ex: 10000"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Total de pontos que correspondem ao valor gasto</p>
+                </div>
+              </>
+            )}
 
             
 
           </div>
         </div>
 
+        {/* Seção específica para campanhas automáticas */}
+        {formData.type === "RewardType_Auto" && (
+          <div className="rounded-lg bg-white p-6 shadow">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Configurações da Campanha Automática</h2>
+            
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label htmlFor="benefit_description" className="block text-sm font-medium text-gray-700 mb-2">
+                  Definição do Benefício <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  id="benefit_description"
+                  name="benefit_description"
+                  value={formData.benefit_description || ""}
+                  onChange={handleChange}
+                  rows={4}
+                  required
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                  placeholder="Ex: Faça compras no valor mais de 2000Mt e ganhe 1000Mt de Bônus"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Descreva o benefício da campanha automática (ex: Faça compras no valor mais de 2000Mt e ganhe 1000Mt de Bônus)
+                </p>
+              </div>
+              
+              <div>
+                <label htmlFor="min_purchase_amount" className="block text-sm font-medium text-gray-700 mb-2">
+                  Valor Mínimo de Compra (MT)
+                </label>
+                <input
+                  type="number"
+                  id="min_purchase_amount"
+                  name="min_purchase_amount"
+                  value={formData.min_purchase_amount ?? ""}
+                  onChange={handleChange}
+                  min="0"
+                  step="0.01"
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                  placeholder="Ex: 2000.00"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Valor mínimo de compra necessário para ganhar o benefício (opcional)
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Seção específica para campanhas de sorteio */}
+        {formData.type === "RewardType_Draw" && (
+          <div className="rounded-lg bg-white p-6 shadow">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Configurações da Campanha de Sorteio</h2>
+            
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label htmlFor="draw_participation_condition" className="block text-sm font-medium text-gray-700 mb-2">
+                  Critérios de Participação <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  id="draw_participation_condition"
+                  name="draw_participation_condition"
+                  value={formData.draw_participation_condition || ""}
+                  onChange={handleChange}
+                  rows={4}
+                  required
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                  placeholder="Ex: Compre coca-cola aqui neste estabelecimento e habilita-se em ganhar prêmios, quando mais comprares aumentam as chances de ganhares"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Descreva os critérios de participação (ex: Compre coca-cola aqui neste estabelecimento e habilita-se em ganhar prêmios)
+                </p>
+              </div>
+            </div>
+
+            {/* Gerenciador de Prêmios */}
+            <div className="mt-6">
+              <div className="mb-4">
+                <label htmlFor="number_of_prizes" className="block text-sm font-medium text-gray-700 mb-2">
+                  Número de Prêmios <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  id="number_of_prizes"
+                  min="1"
+                  max="20"
+                  value={numberOfPrizes}
+                  onChange={(e) => {
+                    const num = parseInt(e.target.value) || 1;
+                    setNumberOfPrizes(num);
+                    // Gerar prêmios automaticamente
+                    const newPrizes: DrawPrize[] = [];
+                    for (let i = 1; i <= num; i++) {
+                      // Manter o nome do prêmio existente se já existir, senão vazio
+                      const existingPrize = drawPrizes.find(p => p.position === i);
+                      newPrizes.push({
+                        position: i,
+                        prize_name: existingPrize?.prize_name || "",
+                        prize_points: 0
+                      });
+                    }
+                    setDrawPrizes(newPrizes);
+                  }}
+                  required
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500 max-w-xs"
+                  placeholder="Ex: 5"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Defina quantos prêmios serão sorteados (ex: 5 = 1º ao 5º lugar)
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                {drawPrizes.map((prize, index) => (
+                  <div key={index} className="border border-gray-200 rounded-lg p-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          {prize.position}º Lugar
+                        </label>
+                        <div className="flex items-center h-10 px-3 bg-gray-50 rounded-lg border border-gray-200 text-gray-700">
+                          Posição {prize.position}
+                        </div>
+                        <p className="mt-1 text-xs text-gray-500">Posição definida automaticamente</p>
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Prêmio do {prize.position}º Lugar <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={prize.prize_name}
+                          onChange={(e) => {
+                            const newPrizes = [...drawPrizes];
+                            newPrizes[index].prize_name = e.target.value;
+                            setDrawPrizes(newPrizes);
+                          }}
+                          required
+                          className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                          placeholder={`Ex: ${prize.position === 1 ? 'Carro' : prize.position === 2 ? 'Moto' : `Vale-compras de ${prize.position * 500}MT`}`}
+                        />
+                        <p className="mt-1 text-xs text-gray-500">Descreva o prêmio para o {prize.position}º lugar</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {drawPrizes.length === 0 && (
+                <p className="text-sm text-red-500 mt-2">Adicione pelo menos um prêmio</p>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Configurações baseadas no tipo de campanha */}
-        {formData.type && formData.type !== "RewardType_Booking" && (
+        {formData.type && formData.type !== "RewardType_Booking" && formData.type !== "RewardType_Auto" && formData.type !== "RewardType_Draw" && (
         <div className="rounded-lg bg-white p-6 shadow">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               Configurações - {campaignTypes.find(t => t.value === formData.type)?.label}
             </h2>
           
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              {/* Campos para Oferta Automática (RewardType_Auto) */}
-              {formData.type === "RewardType_Auto" && (
+              {/* Campos para outros tipos de campanha */}
+              {formData.type && formData.type !== "RewardType_Auto" && (
                 <>
-                  <div className="md:col-span-2">
-                    <label htmlFor="benefit_description" className="block text-sm font-medium text-gray-700 mb-2">
-                      Descrição do Benefício <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      id="benefit_description"
-                      name="benefit_description"
-                      value={formData.benefit_description || ""}
-                      onChange={handleChange}
-                      rows={3}
-                      required
-                      className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
-                      placeholder="Ex: Compre 5 latas de bolachas e ganha um frango"
-                    />
-                    <p className="mt-1 text-xs text-gray-500">
-                      Descreva o benefício da campanha (ex: compre X e ganhe Y)
-                    </p>
-                  </div>
-
+                  {/* Campos específicos para outros tipos */}
                   <div>
                     <label htmlFor="required_quantity" className="block text-sm font-medium text-gray-700 mb-2">
-                      Quantidade Necessária <span className="text-red-500">*</span>
+                      Quantidade Necessária
                     </label>
                     <input
                       type="number"
@@ -1420,7 +1665,6 @@ export default function NewCampaignPage() {
                       onChange={handleChange}
                       min="1"
                       step="1"
-                      required
                       className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
                       placeholder="Ex: 5"
                     />
@@ -1431,7 +1675,7 @@ export default function NewCampaignPage() {
 
                   <div>
                     <label htmlFor="reward_description_auto" className="block text-sm font-medium text-gray-700 mb-2">
-                      Descrição do Prêmio <span className="text-red-500">*</span>
+                      Descrição do Prêmio
                     </label>
                     <input
                       type="text"
@@ -1455,73 +1699,6 @@ export default function NewCampaignPage() {
                 </>
               )}
 
-              {/* Periodicidade do Sorteio (CR#3) */}
-              {formData.type === "RewardType_Draw" && (
-                <div>
-                  <label htmlFor="draw_periodicity" className="block text-sm font-medium text-gray-700 mb-2">
-                    Periodicidade de atribuição de prémios <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    id="draw_periodicity"
-                    name="draw_periodicity"
-                    value={formData.draw_periodicity ?? ""}
-                    onChange={handleChange}
-                    required
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
-                  >
-                    <option value="" disabled>Selecione</option>
-                    <option value="daily">Diária</option>
-                    <option value="weekly">Semanal</option>
-                    <option value="monthly">Mensal</option>
-                    <option value="event">Por evento</option>
-                  </select>
-                </div>
-              )}
-
-              {/* Pontos necessários por participação (CR#3) */}
-              {formData.type === "RewardType_Draw" && (
-                <div>
-                  <label htmlFor="draw_points_per_participation" className="block text-sm font-medium text-gray-700 mb-2">
-                    Pontos necessários por participação
-                  </label>
-                  <input
-                    type="number"
-                    id="draw_points_per_participation"
-                    name="draw_points_per_participation"
-                    value={formData.draw_points_per_participation ?? ""}
-                    onChange={handleChange}
-                    min="0"
-                    step="1"
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
-                    placeholder="Ex: 100"
-                  />
-                  <p className="mt-1 text-xs text-gray-500">Pontos debitados para participar do sorteio.</p>
-                </div>
-              )}
-
-              {/* Lista de prémios por fase (CR#3) */}
-              {formData.type === "RewardType_Draw" && (
-                <div>
-                  <label htmlFor="draw_prizes_list" className="block text-sm font-medium text-gray-700 mb-2">
-                    Lista de prémios por fase (opcional)
-                  </label>
-                  <textarea
-                    id="draw_prizes_list"
-                    name="draw_prizes_list"
-                    value={Array.isArray(formData.draw_prizes_list) ? JSON.stringify(formData.draw_prizes_list, null, 2) : (formData.draw_prizes_list ?? "")}
-                    onChange={(e) => {
-                      setFormData(prev => ({
-                        ...prev,
-                        draw_prizes_list: e.target.value
-                      }));
-                    }}
-                    rows={4}
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500 font-mono text-xs"
-                    placeholder='Ex: [{"name":"Prémio 1","value_mt":500,"phase":"fase1"}]'
-                  />
-                  <p className="mt-1 text-xs text-gray-500">Formato JSON. Campos suportados: name, value_mt, description, phase.</p>
-                </div>
-              )}
 
               {/* Descrição da Recompensa (mantido apenas para Troca, conforme CR) */}
               {formData.type === "RewardType_Exchange" && (
@@ -2192,8 +2369,8 @@ export default function NewCampaignPage() {
                 </>
               )}
 
-              {/* Valor Máximo de Compra (apenas para tipos que envolvem compras) */}
-              {(formData.type === "RewardType_Auto" || formData.type === "RewardType_Draw" || 
+              {/* Valor Máximo de Compra (apenas para outros tipos que envolvem compras) */}
+              {(formData.type === "RewardType_Draw" || 
                 formData.type === "RewardType_Exchange" || formData.type === "RewardType_Challenge" ||
                 formData.type === "RewardType_Voucher") && (
             <div>

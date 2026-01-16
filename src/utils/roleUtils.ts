@@ -43,15 +43,15 @@ export function getUserRole(user: User | null): string {
                   normalizeRole((user as any).role_name) ||
                   normalizeRole((user as any).user_role);
   
-  // Debug: logar o role encontrado
-  if (typeof window !== "undefined" && roleName) {
-    console.log("🔍 [ROLE] Role detectado:", {
-      roleRaw: user.role,
-      roleName: user.role_name,
-      userRole: user.user_role,
-      roleNameNormalized: roleName,
-    });
-  }
+  // Debug: logar o role encontrado (comentado para reduzir poluição do console)
+  // if (typeof window !== "undefined" && roleName && process.env.NODE_ENV === 'development') {
+  //   console.log("🔍 [ROLE] Role detectado:", {
+  //     roleRaw: user.role,
+  //     roleName: user.role_name,
+  //     userRole: user.user_role,
+  //     roleNameNormalized: roleName,
+  //   });
+  // }
   
   return roleName;
 }
@@ -77,13 +77,13 @@ export function isMerchant(user: User | null): boolean {
   const roleName = getUserRole(user);
   const merchantVariations = ["merchant", "merchante", "comerciante", "merchant_user"];
   
-  // Debug: logar verificação de merchant
-  if (typeof window !== "undefined") {
-    console.log("🔍 [ROLE] Verificando se é merchant:", {
-      roleName,
-      isMerchant: merchantVariations.includes(roleName),
-    });
-  }
+  // Debug: logar verificação de merchant (comentado para reduzir poluição do console)
+  // if (typeof window !== "undefined" && process.env.NODE_ENV === 'development') {
+  //   console.log("🔍 [ROLE] Verificando se é merchant:", {
+  //     roleName,
+  //     isMerchant: merchantVariations.includes(roleName),
+  //   });
+  // }
   
   return merchantVariations.includes(roleName);
 }
@@ -97,14 +97,14 @@ export function isUser(user: User | null): boolean {
   const roleName = getUserRole(user);
   const userVariations = ["user", "usuário", "usuario", "cliente", "customer", "client", "users"];
   
-  // Debug: logar verificação de user
-  if (typeof window !== "undefined") {
-    console.log("🔍 [ROLE] Verificando se é user/cliente:", {
-      roleName,
-      isUser: userVariations.includes(roleName),
-      userObject: user
-    });
-  }
+  // Debug: logar verificação de user (comentado para reduzir poluição do console)
+  // if (typeof window !== "undefined" && process.env.NODE_ENV === 'development') {
+  //   console.log("🔍 [ROLE] Verificando se é user/cliente:", {
+  //     roleName,
+  //     isUser: userVariations.includes(roleName),
+  //     userObject: user
+  //   });
+  // }
   
   return userVariations.includes(roleName);
 }

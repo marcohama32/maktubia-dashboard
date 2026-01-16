@@ -850,7 +850,7 @@ function MerchantDashboardContent() {
 
       {/* Título e Filtros para Lista de Campanhas */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-xl font-semibold text-gray-900">Minhas Campanhas</h2>
+        <h2 className="text-xl font-semibold text-gray-900">Campanhas</h2>
         <div className="flex gap-4">
           <select
             value={statusFilter}

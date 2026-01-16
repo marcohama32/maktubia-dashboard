@@ -427,9 +427,11 @@ function PointsPageContent() {
 
 export default function PointsPage() {
   return (
-    <ProtectedRoute requireClient={true} redirectTo="/merchant/campaigns/public">
+    <ProtectedRoute requireClient={true} redirectTo="/admin/campaigns">
       <PointsPageContent />
     </ProtectedRoute>
   );
 }
+
+
 

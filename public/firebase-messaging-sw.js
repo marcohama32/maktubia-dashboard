@@ -66,39 +66,69 @@ const messaging = firebase.messaging();
 
 // Escutar mensagens em background
 messaging.onBackgroundMessage((payload) => {
-  console.log('🔔 Mensagem FCM recebida em background:', payload);
+  console.log('🔔 [Service Worker] Mensagem FCM recebida em background:', payload);
   
   const notificationTitle = payload.notification?.title || payload.data?.title || 'Notificação';
+  const notificationBody = payload.notification?.body || payload.data?.message || payload.data?.body || '';
+  
+  // Determinar URL de destino baseado no tipo de notificação
+  let targetUrl = '/admin/purchases'; // URL padrão
+  
+  if (payload.data?.campaign_id || payload.data?.campaign?.id) {
+    const campaignId = payload.data?.campaign_id || payload.data?.campaign?.id;
+    targetUrl = `/admin/campaigns/${campaignId}`;
+  } else if (payload.data?.url) {
+    targetUrl = payload.data.url;
+  } else if (payload.data?.purchase_id) {
+    targetUrl = '/admin/purchases';
+  }
+  
   const notificationOptions = {
-    body: payload.notification?.body || payload.data?.message || '',
+    body: notificationBody,
     icon: '/images/logo2.png', // Logo da Maktubia
     badge: '/images/logo2.png', // Badge também com logo
     image: '/images/logo2.png', // Imagem grande (se suportado)
-    tag: payload.data?.id || `notif_${Date.now()}`,
+    tag: payload.data?.id || payload.data?.notificationId || `notif_${Date.now()}`,
     data: {
       ...payload.data,
-      // URL de destino para redirecionar ao clicar
-      url: payload.data?.purchase_id 
-        ? '/admin/purchases' 
-        : '/admin/purchases',
+      url: targetUrl,
+      notificationId: payload.data?.id || payload.data?.notificationId,
+      type: payload.data?.type || 'info',
+      campaign_id: payload.data?.campaign_id || payload.data?.campaign?.id,
     },
     requireInteraction: false,
     silent: false,
-    // Aumentar tempo de exibição
     timestamp: Date.now(),
   };
 
+  console.log('🔔 [Service Worker] Exibindo notificação:', {
+    title: notificationTitle,
+    body: notificationBody,
+    url: targetUrl,
+    tag: notificationOptions.tag,
+  });
+
   // Exibir notificação
-  self.registration.showNotification(notificationTitle, notificationOptions);
+  return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
 // Escutar cliques na notificação
 self.addEventListener('notificationclick', (event) => {
-  console.log('🔔 Notificação clicada:', event);
+  console.log('🔔 [Service Worker] Notificação clicada:', event);
   event.notification.close();
   
-  // URL de destino (página de compras ou login se não autenticado)
-  const targetUrl = event.notification.data?.url || '/admin/purchases';
+  // URL de destino baseado nos dados da notificação
+  let targetUrl = '/admin/purchases'; // URL padrão
+  
+  if (event.notification.data?.campaign_id) {
+    targetUrl = `/admin/campaigns/${event.notification.data.campaign_id}`;
+  } else if (event.notification.data?.url) {
+    targetUrl = event.notification.data.url;
+  } else if (event.notification.data?.purchase_id) {
+    targetUrl = '/admin/purchases';
+  }
+  
+  console.log('🔔 [Service Worker] Redirecionando para:', targetUrl);
   
   // Verificar se precisa autenticar (verificar token no localStorage via message)
   event.waitUntil(

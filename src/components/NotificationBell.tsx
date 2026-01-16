@@ -1,14 +1,35 @@
 import { useState, useRef, useEffect } from "react";
 import { useNotifications } from "@/contexts/NotificationContext";
 import { NotificationIcon } from "@/dashboard/sidebar/icons/NotificationIcon";
+import { browserNotificationService } from "@/services/browserNotification.service";
 
 export function NotificationBell() {
   const [mounted, setMounted] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
   
   // Always call hook at top level - context should provide defaults for SSR
   const { notifications, unreadCount, markAsRead, markAllAsRead, removeNotification } = useNotifications();
+
+  // Verificar permissão de notificações
+  useEffect(() => {
+    if (mounted && typeof window !== 'undefined' && 'Notification' in window) {
+      setNotificationPermission(Notification.permission);
+      
+      // Escutar mudanças na permissão (se o usuário mudar nas configurações)
+      const checkPermission = () => {
+        setNotificationPermission(Notification.permission);
+      };
+      
+      // Verificar periodicamente (a cada 2 segundos quando o dropdown estiver aberto)
+      const interval = isOpen ? setInterval(checkPermission, 2000) : null;
+      
+      return () => {
+        if (interval) clearInterval(interval);
+      };
+    }
+  }, [mounted, isOpen]);
   
   useEffect(() => {
     setMounted(true);
@@ -121,14 +142,68 @@ export function NotificationBell() {
           {/* Header */}
           <div className="flex items-center justify-between border-b border-gray-200 p-4">
             <h3 className="text-lg font-semibold text-gray-900">Notificações</h3>
-            {unreadCount > 0 && (
-              <button
-                onClick={markAllAsRead}
-                className="text-sm font-medium text-blue-600 hover:text-blue-800"
-              >
-                Marcar todas como lidas
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {unreadCount > 0 && (
+                <button
+                  onClick={markAllAsRead}
+                  className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                >
+                  Marcar todas como lidas
+                </button>
+              )}
+              {browserNotificationService.isNotificationSupported() && (() => {
+                const permission = notificationPermission || browserNotificationService.getPermission();
+                
+                if (permission === 'denied') {
+                  return (
+                    <button
+                      onClick={() => {
+                        const message = `⚠️ Notificações bloqueadas!\n\nPara ativar notificações do navegador:\n\n1. Clique no ícone de cadeado 🔒 na barra de endereço (à esquerda da URL)\n2. Encontre "Notificações" na lista\n3. Selecione "Permitir"\n4. Recarregue esta página (F5)\n\nOu vá em:\nConfigurações do navegador → Privacidade e segurança → Notificações do site → Permitir para este site`;
+                        alert(message);
+                      }}
+                      className="text-xs font-medium text-orange-600 hover:text-orange-800 px-2 py-1 border border-orange-300 rounded bg-orange-50"
+                      title="Notificações bloqueadas - Clique para ver instruções"
+                    >
+                      🔒 Bloqueado
+                    </button>
+                  );
+                } else if (permission !== 'granted') {
+                  return (
+                    <button
+                      onClick={async () => {
+                        try {
+                          const newPermission = await browserNotificationService.requestPermission();
+                          setNotificationPermission(newPermission);
+                          
+                          if (newPermission === 'granted') {
+                            alert('✅ Permissão de notificações concedida! Você receberá notificações mesmo quando a página não estiver em foco.');
+                            // Não precisa recarregar, apenas atualizar o estado
+                          } else if (newPermission === 'denied') {
+                            alert('⚠️ Permissão negada. Para receber notificações, permita no navegador nas configurações do site.');
+                          }
+                        } catch (error) {
+                          console.error('Erro ao solicitar permissão:', error);
+                          alert('❌ Erro ao solicitar permissão. Tente permitir manualmente nas configurações do navegador.');
+                        }
+                      }}
+                      className="text-xs font-medium text-green-600 hover:text-green-800 px-2 py-1 border border-green-300 rounded bg-green-50"
+                      title="Ativar notificações do navegador"
+                    >
+                      🔔 Ativar
+                    </button>
+                  );
+                } else {
+                  return (
+                    <span 
+                      className="text-xs font-medium text-green-600 px-2 py-1"
+                      title="Notificações do navegador ativadas"
+                    >
+                      ✅ Ativo
+                    </span>
+                  );
+                }
+              })()}
+            </div>
           </div>
 
           {/* Notifications List */}
